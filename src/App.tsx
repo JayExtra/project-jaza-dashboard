@@ -10,7 +10,6 @@ const App = () => {
     <BrowserRouter>
       <Routes>
         <Route path="/signin" element={<SignIn />} />
-        
         {/* Protected layout routes */}
         <Route path="/" element={<DashboardLayout />}>
           <Route index element={<Home />} />
