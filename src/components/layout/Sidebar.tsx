@@ -62,6 +62,7 @@ export const Sidebar = ({ sidebarCollapsed }) => {
           refreshToken,
           allDevices: true
         }),
+        credentials: 'include',
       });
 
       if (response.ok) {
@@ -80,7 +81,7 @@ export const Sidebar = ({ sidebarCollapsed }) => {
   };
 
   return (
-    <aside 
+    <aside
       className={`${sidebarCollapsed ? 'w-20' : 'w-64'} transition-all duration-300 ease-in-out border-r border-border bg-surface-lowest flex flex-col justify-between`}
     >
       <div>
@@ -100,9 +101,9 @@ export const Sidebar = ({ sidebarCollapsed }) => {
           <div className={`flex items-center gap-2 bg-surface-low rounded-xl px-3 py-2 ${sidebarCollapsed ? 'justify-center' : ''}`}>
             <Search size={16} className="text-foreground/50 shrink-0" />
             {!sidebarCollapsed && (
-              <input 
-                type="text" 
-                placeholder="Search menu..." 
+              <input
+                type="text"
+                placeholder="Search menu..."
                 className="bg-transparent border-none outline-none text-sm w-full placeholder:text-foreground/50"
               />
             )}
@@ -114,14 +115,14 @@ export const Sidebar = ({ sidebarCollapsed }) => {
           <NavItem path="/campaign" icon={<Megaphone size={20} />} label="Campaign" active={isActive('/campaign')} collapsed={sidebarCollapsed} />
           <NavItem path="/payments" icon={<CreditCard size={20} />} label="Payments" active={isActive('/payments')} collapsed={sidebarCollapsed} />
           <NavItem path="/influencer" icon={<Users size={20} />} label="Influencer" active={isActive('/influencer')} collapsed={sidebarCollapsed} />
-          
+
           <div className="mt-4">
-            <NavItem 
+            <NavItem
               path=""
-              icon={<Settings size={20} />} 
-              label="Settings" 
-              hasChevron 
-              collapsed={sidebarCollapsed} 
+              icon={<Settings size={20} />}
+              label="Settings"
+              hasChevron
+              collapsed={sidebarCollapsed}
               onClick={() => setSettingsOpen(!settingsOpen)}
               isOpen={settingsOpen}
               active={false}
@@ -135,7 +136,7 @@ export const Sidebar = ({ sidebarCollapsed }) => {
           </div>
 
           <NavItem path="/team" icon={<Users size={20} />} label="Team" active={isActive('/team')} collapsed={sidebarCollapsed} />
-          
+
           <div className="mt-8 mb-2">
             <hr className="border-border mx-4" />
           </div>
@@ -164,12 +165,12 @@ export const Sidebar = ({ sidebarCollapsed }) => {
           )}
         </div>
 
-        <NavItem 
-          icon={<LogOut size={20} className="text-red-500" />} 
+        <NavItem
+          icon={<LogOut size={20} className="text-red-500" />}
           label={<span className="text-red-500">Sign Out</span>}
           path=""
           onClick={handleSignOut}
-          collapsed={sidebarCollapsed} 
+          collapsed={sidebarCollapsed}
           active={false}
         />
       </div>

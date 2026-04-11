@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, ArrowRight, Loader2, TrendingUp } from 'lucide-react';
 import { z } from 'zod';
@@ -20,6 +20,55 @@ export const SignIn = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [globalError, setGlobalError] = useState<string | null>(null);
   const navigate = useNavigate();
+  const authChecked = useRef(false);
+
+  useEffect(() => {
+    if (authChecked.current) return;
+
+    const handleGoogleAuth = async () => {
+      // 1. Check if we already have a session in LocalStorage to prevent unnecessary calls
+      if (localStorage.getItem('accessToken')) {
+        navigate('/');
+        return;
+      }
+
+      try {
+        setIsLoading(true);
+        // 2. Call /me with 'include' to send the Google Session Cookie
+        const response = await fetch(`${apiBaseUrl}/auth/me`, {
+          credentials: 'include',
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+
+          // 3. SECURE THE TOKENS (The "Handover")
+          if (data.accessToken) {
+            localStorage.setItem('accessToken', data.accessToken);
+            localStorage.setItem('refreshToken', data.refreshToken);
+            localStorage.setItem('user', JSON.stringify({
+              userId: data.userId,
+              email: data.email,
+              firstName: data.firstName,
+              lastName: data.lastName,
+            }));
+
+            authChecked.current = true;
+            // 4. Redirect to dashboard - Loop stopped!
+            navigate('/', { replace: true });
+          }
+        } else {
+          console.log("No cookie session found, user needs to log in manually.");
+        }
+      } catch (err) {
+        console.error('Session check error:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    handleGoogleAuth();
+  }, [navigate]);
 
   const {
     register,
@@ -82,7 +131,7 @@ export const SignIn = () => {
   };
 
   const handleGoogleSignIn = () => {
-    // Placeholder
+    window.location.href = `${config.apiBaseUrl}/auth/oauth2/google`;
   };
 
   return (
