@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Outlet, Navigate, useLocation } from 'react-router-dom';
 import { Sidebar } from '../components/layout/Sidebar';
 import { Topbar } from '../components/layout/Topbar';
+import { EmailVerificationOverlay } from '../components/EmailVerificationOverlay';
 
 export const DashboardLayout = () => {
   const [isDark, setIsDark] = useState(false);
@@ -23,6 +24,8 @@ export const DashboardLayout = () => {
 
   return (
     <div className="flex bg-background min-h-screen text-foreground font-sans transition-colors duration-200">
+      <EmailVerificationOverlay />
+      
       {/* Sidebar */}
       <Sidebar sidebarCollapsed={sidebarCollapsed} />
 

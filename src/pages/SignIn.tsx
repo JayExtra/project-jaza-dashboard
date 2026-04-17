@@ -51,6 +51,7 @@ export const SignIn = () => {
               email: data.email,
               firstName: data.firstName,
               lastName: data.lastName,
+              emailVerified: data.emailVerified,
             }));
 
             authChecked.current = true;
@@ -103,6 +104,8 @@ export const SignIn = () => {
         return;
       }
 
+      console.log(`SUCCESS LOGIN: user data, ID : ${result.userId} , email: ${result.email}, emailVerified: ${result.emailVerified} ,  accessToken: ${result.accessToken}`);
+
       // Success - store tokens and user info
       localStorage.setItem('accessToken', result.accessToken);
       localStorage.setItem('refreshToken', result.refreshToken);
@@ -113,6 +116,7 @@ export const SignIn = () => {
         lastName: result.lastName,
         role: result.role,
         emailVerified: result.emailVerified,
+        organisation: result.organisation,
       }));
 
       // Optional: store expiry time for easy checking later
