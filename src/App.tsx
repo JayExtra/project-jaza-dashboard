@@ -4,12 +4,14 @@ import { SignIn } from './pages/SignIn';
 import { DashboardLayout } from './pages/DashboardLayout';
 import { Home } from './pages/Home';
 import { Campaign } from './pages/Campaign';
+import { VerifyEmail } from './pages/VerifyEmail';
 
 const App = () => {
   return (
     <BrowserRouter>
       <Routes>
         <Route path="/signin" element={<SignIn />} />
+        <Route path="/verify-email" element={<VerifyEmail />} />
         {/* Protected layout routes */}
         <Route path="/" element={<DashboardLayout />}>
           <Route index element={<Home />} />
