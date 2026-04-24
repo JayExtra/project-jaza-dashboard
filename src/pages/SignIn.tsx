@@ -35,7 +35,7 @@ export const SignIn = () => {
       try {
         setIsLoading(true);
         // 2. Call /me with 'include' to send the Google Session Cookie
-        const response = await fetch(`${apiBaseUrl}/auth/me`, {
+        const response = await fetch(`${apiBaseUrl}/public/profile/me`, {
           credentials: 'include',
         });
 
@@ -59,7 +59,8 @@ export const SignIn = () => {
             navigate('/', { replace: true });
           }
         } else {
-          console.log("No cookie session found, user needs to log in manually.");
+          const data = await response.json();
+          console.log("No cookie session found, user needs to log in manually. Data: ", data);
         }
       } catch (err) {
         console.error('Session check error:', err);

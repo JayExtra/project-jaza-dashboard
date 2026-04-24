@@ -52,11 +52,13 @@ export const Sidebar = ({ sidebarCollapsed }) => {
   const handleSignOut = async () => {
     try {
       const refreshToken = localStorage.getItem('refreshToken');
+      const accessToken = localStorage.getItem('accessToken');
+      console.log("Logout request accessToken: ", accessToken);
       const response = await fetch(`${config.apiBaseUrl}/auth/logout`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+          'Authorization': `Bearer ${accessToken}`
         },
         body: JSON.stringify({
           refreshToken,
@@ -64,6 +66,8 @@ export const Sidebar = ({ sidebarCollapsed }) => {
         }),
         credentials: 'include',
       });
+
+      console.log("Logout response: ", response);
 
       if (response.ok) {
         localStorage.removeItem('accessToken');
