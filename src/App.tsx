@@ -5,6 +5,7 @@ import { DashboardLayout } from './pages/DashboardLayout';
 import { Home } from './pages/Home';
 import { Campaign } from './pages/Campaign';
 import { VerifyEmail } from './pages/VerifyEmail';
+import { ForgotPassword } from './pages/ForgotPassword';
 
 const App = () => {
   return (
@@ -12,6 +13,7 @@ const App = () => {
       <Routes>
         <Route path="/signin" element={<SignIn />} />
         <Route path="/verify-email" element={<VerifyEmail />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
         {/* Protected layout routes */}
         <Route path="/" element={<DashboardLayout />}>
           <Route index element={<Home />} />

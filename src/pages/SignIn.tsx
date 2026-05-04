@@ -196,9 +196,13 @@ export const SignIn = () => {
                 <label className="block text-xs font-bold text-foreground/60 tracking-widest uppercase">
                   Password
                 </label>
-                <a href="#" className="text-xs font-bold text-secondary tracking-widest uppercase hover:underline">
+                <button
+                  type="button"
+                  onClick={() => navigate('/forgot-password')}
+                  className="text-xs font-bold text-secondary tracking-widest uppercase hover:underline"
+                >
                   Forgot?
-                </a>
+                </button>
               </div>
               <div className="relative">
                 <input
