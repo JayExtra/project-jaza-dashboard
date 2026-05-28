@@ -5,6 +5,8 @@ import { z } from 'zod';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import config from '../lib/config';
+import { Link } from 'react-router-dom';
+
 
 const signInSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
@@ -246,7 +248,7 @@ export const SignIn = () => {
           </form>
 
           <p className="text-center mt-12 text-sm text-foreground/60">
-            Don't have a ledger yet?{' '}
+            Don't have a kitty yet?{' '}
             <a href={`${config.landingUrl}/signup`} className="font-bold text-foreground hover:text-primary transition-colors">
               Join Now
             </a>
@@ -285,8 +287,9 @@ export const SignIn = () => {
         </div>
 
         {/* Top-right floating logo/brand name */}
-        <div className="absolute top-12 right-12 z-10 text-white font-display font-bold text-3xl tracking-tight">
-          Jaza
+        <div className="flex items-center pl-4 border-l border-border">
+        
+        
         </div>
 
         {/* Central Card */}

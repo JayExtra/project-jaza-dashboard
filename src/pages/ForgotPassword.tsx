@@ -499,10 +499,7 @@ export const ForgotPassword = () => {
           SECURITY
         </div>
 
-        {/* Top-right floating logo/brand name */}
-        <div className="absolute top-12 right-12 z-10 text-white font-display font-bold text-3xl tracking-tight">
-          Jaza
-        </div>
+        
 
         {/* Central Card */}
         <div className="relative z-10 w-full max-w-md">

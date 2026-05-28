@@ -20,6 +20,8 @@ export default {
         foreground: "var(--on-surface)",
         border: "var(--border)",
         input: "var(--surface-container-highest)",
+        'surface-highest': "var(--surface-container-highest)",
+        'surface-container-highest': "var(--surface-container-highest)",
       },
       fontFamily: {
         display: ['"Space Grotesk"', 'sans-serif'],
