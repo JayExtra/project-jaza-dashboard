@@ -122,19 +122,24 @@ export const Sidebar = ({ sidebarCollapsed }) => {
 
           <div className="mt-4">
             <NavItem
-              path=""
+              path="/settings"
               icon={<Settings size={20} />}
               label="Settings"
               hasChevron
               collapsed={sidebarCollapsed}
-              onClick={() => setSettingsOpen(!settingsOpen)}
+              onClick={() => {
+                setSettingsOpen(!settingsOpen);
+                navigate('/settings');
+              }}
               isOpen={settingsOpen}
-              active={false}
+              active={isActive('/settings')}
             />
             {(!sidebarCollapsed && settingsOpen) && (
               <div className="ml-10 mt-1 space-y-3 py-2 text-sm text-foreground/60">
-                <div className="cursor-pointer hover:text-foreground transition-colors">Connected Service</div>
-                <div className="cursor-pointer hover:text-foreground transition-colors">Password & Security</div>
+                <div className="cursor-pointer hover:text-foreground transition-colors" onClick={() => navigate('/settings?tab=account')}>Account</div>
+                <div className="cursor-pointer hover:text-foreground transition-colors" onClick={() => navigate('/settings?tab=notification')}>Notification</div>
+                <div className="cursor-pointer hover:text-foreground transition-colors" onClick={() => navigate('/settings?tab=general')}>General</div>
+                <div className="cursor-pointer hover:text-foreground transition-colors" onClick={() => navigate('/settings?tab=billing')}>Billing</div>
               </div>
             )}
           </div>
