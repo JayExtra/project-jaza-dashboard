@@ -2,13 +2,16 @@ import { useState, useEffect } from 'react';
 import { Outlet, Navigate, useLocation } from 'react-router-dom';
 import { Sidebar } from '../components/layout/Sidebar';
 import { Topbar } from '../components/layout/Topbar';
+import { AIAgentPanel } from '../components/layout/AIAgentPanel';
 import { EmailVerificationOverlay } from '../components/EmailVerificationOverlay';
+import { useAuth } from '../hooks/useAuth';
 
 export const DashboardLayout = () => {
   const [isDark, setIsDark] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const isAuthenticated = !!localStorage.getItem('accessToken') || localStorage.getItem('isAuthenticated') === 'true';
+  const [isAiOpen, setIsAiOpen] = useState(false);
   const location = useLocation();
+  const { isAuthenticated, isLoading } = useAuth();
 
   useEffect(() => {
     if (isDark) {
@@ -18,16 +21,34 @@ export const DashboardLayout = () => {
     }
   }, [isDark]);
 
+  useEffect(() => {
+    const handleToggle = () => setIsAiOpen(prev => !prev);
+    window.addEventListener('toggle-ai-panel', handleToggle);
+    return () => window.removeEventListener('toggle-ai-panel', handleToggle);
+  }, []);
+
+  // Show nothing while auth is initializing
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-background">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-foreground/60">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
   if (!isAuthenticated) {
     return <Navigate to="/signin" state={{ from: location }} replace />;
   }
 
   return (
-    <div className="flex bg-background min-h-screen text-foreground font-sans transition-colors duration-200">
+    <div className="flex bg-background min-h-screen text-foreground font-sans transition-colors duration-200 relative overflow-hidden">
       <EmailVerificationOverlay />
       
       {/* Sidebar */}
-      <Sidebar sidebarCollapsed={sidebarCollapsed} />
+      <Sidebar sidebarCollapsed={sidebarCollapsed} setIsAiOpen={setIsAiOpen} />
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
@@ -37,6 +58,8 @@ export const DashboardLayout = () => {
           setSidebarCollapsed={setSidebarCollapsed} 
           isDark={isDark} 
           setIsDark={setIsDark} 
+          isAiOpen={isAiOpen}
+          setIsAiOpen={setIsAiOpen}
         />
 
         {/* Dynamic Content */}
@@ -44,6 +67,9 @@ export const DashboardLayout = () => {
           <Outlet />
         </div>
       </main>
+
+      {/* AI Agent Slide-out Panel */}
+      <AIAgentPanel isOpen={isAiOpen} onClose={() => setIsAiOpen(false)} />
     </div>
   );
 };

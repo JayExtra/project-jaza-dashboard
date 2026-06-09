@@ -2,11 +2,13 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { CheckCircle2, XCircle, Loader2, Mail } from 'lucide-react';
 import config from '../lib/config';
+import { useAuth } from '../hooks/useAuth';
 
 export const VerifyEmail = () => {
   const [searchParams] = useSearchParams();
   const token = searchParams.get('email_token');
   const navigate = useNavigate();
+  const { accessToken, updateUser } = useAuth();
 
   const [status, setStatus] = useState<'verifying' | 'success' | 'error'>('verifying');
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -25,11 +27,10 @@ export const VerifyEmail = () => {
       }
 
       try {
-        const accessToken = localStorage.getItem('accessToken');
-        const userStr = localStorage.getItem('user');
-
-        const headers: HeadersInit = {};
-        if (accessToken && userStr) {
+        const headers: HeadersInit = {
+          'Content-Type': 'application/json',
+        };
+        if (accessToken) {
           headers['Authorization'] = `Bearer ${accessToken}`;
         }
 
@@ -43,12 +44,10 @@ export const VerifyEmail = () => {
             setStatus('success');
             setStatusMessage(result.message || null);
 
-            const hasLocalSession = !!(accessToken && userStr);
+            const hasLocalSession = !!accessToken;
 
             if (result.auth && hasLocalSession) {
-              localStorage.setItem('accessToken', result.auth.accessToken);
-              localStorage.setItem('refreshToken', result.auth.refreshToken);
-              localStorage.setItem('user', JSON.stringify({
+              updateUser({
                 userId: result.auth.userId,
                 email: result.auth.email,
                 firstName: result.auth.firstName,
@@ -56,11 +55,7 @@ export const VerifyEmail = () => {
                 role: result.auth.role,
                 emailVerified: result.auth.emailVerified,
                 organisation: result.auth.organisation,
-              }));
-              if (result.auth.accessExpiresIn) {
-                const expiryTime = Date.now() + (result.auth.accessExpiresIn * 1000);
-                localStorage.setItem('tokenExpiry', expiryTime.toString());
-              }
+              });
             }
 
             // Wait 3 seconds to show success animation before redirecting
@@ -88,7 +83,7 @@ export const VerifyEmail = () => {
     };
 
     verifyToken();
-  }, [token, navigate]);
+  }, [token, navigate, accessToken, updateUser]);
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-[#00342b] via-[#00342b] to-[#00251f] font-sans relative overflow-hidden">

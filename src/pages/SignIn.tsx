@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, ArrowRight, Loader2, TrendingUp } from 'lucide-react';
 import { z } from 'zod';
@@ -6,14 +6,12 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import config from '../lib/config';
 import { Link } from 'react-router-dom';
-
+import { useAuth } from '../hooks/useAuth';
 
 const signInSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
   password: z.string().min(6, 'Password must be at least 6 characters long'),
 });
-
-const apiBaseUrl = config.apiBaseUrl;
 
 type SignInValues = z.infer<typeof signInSchema>;
 
@@ -23,56 +21,62 @@ export const SignIn = () => {
   const [globalError, setGlobalError] = useState<string | null>(null);
   const navigate = useNavigate();
   const authChecked = useRef(false);
+  const { isAuthenticated, login, setTokenAndUser } = useAuth();
 
+  // Check if already authenticated (AuthContext handles silent refresh)
   useEffect(() => {
     if (authChecked.current) return;
+    authChecked.current = true;
 
-    const handleGoogleAuth = async () => {
-      // 1. Check if we already have a session in LocalStorage to prevent unnecessary calls
-      if (localStorage.getItem('accessToken')) {
-        navigate('/');
-        return;
-      }
+    // If AuthContext already authenticated us via silent refresh, redirect
+    if (isAuthenticated) {
+      navigate('/', { replace: true });
+      return;
+    }
 
+    // ONLY check for Google OAuth callback if we're being redirected back from Google
+    // (indicated by a search param set by the backend redirect URL)
+    const searchParams = new URLSearchParams(window.location.search);
+    const isFromGoogleCallback = searchParams.has('from_oauth');
+
+    if (!isFromGoogleCallback) {
+      return;
+    }
+
+    // Check if we're coming back from Google OAuth callback
+    const handleGoogleCallback = async () => {
       try {
-        setIsLoading(true);
-        // 2. Call /me with 'include' to send the Google Session Cookie
-        const response = await fetch(`${apiBaseUrl}/public/profile/me`, {
-          credentials: 'include',
+        const response = await fetch(`${config.apiBaseUrl}/public/profile/me`, {
+          credentials: 'include', // Important: sends the Google session cookie
         });
 
         if (response.ok) {
           const data = await response.json();
 
-          // 3. SECURE THE TOKENS (The "Handover")
+          // Handover: Backend returns JWT tokens and sets refresh token cookie
           if (data.accessToken) {
-            localStorage.setItem('accessToken', data.accessToken);
-            localStorage.setItem('refreshToken', data.refreshToken);
-            localStorage.setItem('user', JSON.stringify({
+            // Set both access token and user data
+            setTokenAndUser(data.accessToken, {
               userId: data.userId,
               email: data.email,
               firstName: data.firstName,
               lastName: data.lastName,
               emailVerified: data.emailVerified,
-            }));
+              role: data.role,
+              organisation: data.organisation,
+            });
 
-            authChecked.current = true;
-            // 4. Redirect to dashboard - Loop stopped!
             navigate('/', { replace: true });
           }
-        } else {
-          const data = await response.json();
-          console.log("No cookie session found, user needs to log in manually. Data: ", data);
         }
+        // If /me endpoint returns no token, user is not coming from Google OAuth - stay on login page
       } catch (err) {
-        console.error('Session check error:', err);
-      } finally {
-        setIsLoading(false);
+        console.error('Google callback check error:', err);
       }
     };
 
-    handleGoogleAuth();
-  }, [navigate]);
+    handleGoogleCallback();
+  }, [isAuthenticated, navigate, setTokenAndUser]);
 
   const {
     register,
@@ -87,51 +91,11 @@ export const SignIn = () => {
     setGlobalError(null);
 
     try {
-      const response = await fetch(`${apiBaseUrl}/auth/login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email: data.email,
-          password: data.password,
-        }),
-      });
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        // Handle error response
-        const errorMessage = result.message || 'Invalid email or password.';
-        setGlobalError(errorMessage);
-        return;
-      }
-
-      console.log(`SUCCESS LOGIN: user data, ID : ${result.userId} , email: ${result.email}, emailVerified: ${result.emailVerified} ,  accessToken: ${result.accessToken}`);
-
-      // Success - store tokens and user info
-      localStorage.setItem('accessToken', result.accessToken);
-      localStorage.setItem('refreshToken', result.refreshToken);
-      localStorage.setItem('user', JSON.stringify({
-        userId: result.userId,
-        email: result.email,
-        firstName: result.firstName,
-        lastName: result.lastName,
-        role: result.role,
-        emailVerified: result.emailVerified,
-        organisation: result.organisation,
-      }));
-
-      // Optional: store expiry time for easy checking later
-      const expiryTime = Date.now() + (result.accessExpiresIn * 1000);
-      localStorage.setItem('tokenExpiry', expiryTime.toString());
-
-      // Navigate to dashboard
+      await login(data.email, data.password);
       navigate('/');
-
     } catch (err) {
-      console.error('Login error:', err);
-      setGlobalError('An unexpected error occurred. Please try again later.');
+      const errorMessage = err instanceof Error ? err.message : 'Invalid email or password.';
+      setGlobalError(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -249,9 +213,9 @@ export const SignIn = () => {
 
           <p className="text-center mt-12 text-sm text-foreground/60">
             Don't have a kitty yet?{' '}
-            <a href={`${config.landingUrl}/signup`} className="font-bold text-foreground hover:text-primary transition-colors">
+            <Link to="/signup" className="font-bold text-foreground hover:text-primary transition-colors">
               Join Now
-            </a>
+            </Link>
           </p>
         </div>
 

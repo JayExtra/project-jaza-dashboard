@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Mail, RefreshCw, AlertCircle } from 'lucide-react';
 import config from '../lib/config';
+import { useAuth } from '../hooks/useAuth';
 
 export const EmailVerificationOverlay = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -8,56 +9,34 @@ export const EmailVerificationOverlay = () => {
   const [attemptsRemaining, setAttemptsRemaining] = useState<number | null>(null);
   const [isResending, setIsResending] = useState(false);
   const [resendMessage, setResendMessage] = useState<string | null>(null);
+  const { user, accessToken, updateUser } = useAuth();
 
   useEffect(() => {
     // Check if user is signed in and email is not verified
-    const checkVerificationStatus = () => {
-      const userStr = localStorage.getItem('user');
-      if (userStr) {
-        try {
-          const user = JSON.parse(userStr);
-          console.log(`User data on polling: ${JSON.stringify(user)}`);
-          if (user && user.emailVerified === false) {
-            setIsOpen(true);
-          } else {
-            setIsOpen(false);
-          }
-        } catch (e) {
-          console.error("Error parsing user from localStorage", e);
-        }
-      } else {
-        setIsOpen(false);
-      }
-    };
+    if (user && user.emailVerified === false) {
+      setIsOpen(true);
+    } else {
+      setIsOpen(false);
+    }
+  }, [user]);
 
-    checkVerificationStatus();
-
-    // Setup polling if dialog is open
+  // Setup polling if dialog is open
+  useEffect(() => {
     let pollInterval: ReturnType<typeof setInterval>;
-    if (isOpen) {
+    if (isOpen && accessToken) {
       pollInterval = setInterval(async () => {
         try {
-          const accessToken = localStorage.getItem('accessToken');
-          console.log(`User access token: ${accessToken}`);
-
-          console.log(`Route: ${config.apiBaseUrl}/auth/email/verification/status`);
-
           const response = await fetch(`${config.apiBaseUrl}/auth/email/verification/status`, {
             headers: {
-              ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {})
+              'Authorization': `Bearer ${accessToken}`,
             }
           });
 
           if (response.ok) {
             const data = await response.json();
             if (data.isVerified) {
-              // Update local state and close
-              const userStr = localStorage.getItem('user');
-              if (userStr) {
-                const user = JSON.parse(userStr);
-                user.emailVerified = true;
-                localStorage.setItem('user', JSON.stringify(user));
-              }
+              // Update user state
+              updateUser({ emailVerified: true });
               setIsOpen(false);
             }
           }
@@ -70,7 +49,7 @@ export const EmailVerificationOverlay = () => {
     return () => {
       if (pollInterval) clearInterval(pollInterval);
     };
-  }, [isOpen]);
+  }, [isOpen, accessToken, updateUser]);
 
   // Cooldown countdown effect
   useEffect(() => {
@@ -92,13 +71,11 @@ export const EmailVerificationOverlay = () => {
     setResendMessage(null);
 
     try {
-      const accessToken = localStorage.getItem('accessToken');
-      // Using /auth/email/resend relative to base URL
       const response = await fetch(`${config.apiBaseUrl}/auth/email/resend`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {})
+          ...(accessToken ? { 'Authorization': `Bearer ${accessToken}` } : {})
         }
       });
 
