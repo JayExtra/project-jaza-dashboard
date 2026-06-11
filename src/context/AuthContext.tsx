@@ -1,7 +1,7 @@
 import React, { createContext, useState, useCallback, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import config from '../lib/config';
-import { attemptRefresh, getAuthToken } from '../lib/api';
+import { attemptRefresh, getAuthToken, resetRefreshFailureFlag } from '../lib/api';
 
 export interface User {
   userId: string;
@@ -52,9 +52,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       try {
         // Check if we have user data in localStorage (e.g., from a previous session)
         const storedUserStr = localStorage.getItem('user');
+        let storedUser: User | null = null;
+        
         if (storedUserStr) {
           try {
-            const storedUser = JSON.parse(storedUserStr);
+            storedUser = JSON.parse(storedUserStr);
             setUser(storedUser);
           } catch (e) {
             console.error('Failed to parse stored user', e);
@@ -64,13 +66,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
         // Attempt silent refresh to get a fresh access token
         const refreshed = await silentRefreshInternal();
+        
         if (!refreshed) {
           // No valid refresh token cookie, clear user
+          // This will trigger a redirect to /signin via DashboardLayout guard
           setUser(null);
+          setAccessToken(null);
         }
       } catch (error) {
         console.error('Failed to initialize auth', error);
         setUser(null);
+        setAccessToken(null);
       } finally {
         setIsLoading(false);
       }
@@ -100,8 +106,29 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
         // Try to fetch user data from refresh response
         // (backend may return updated user info)
+        const storedUserStr = localStorage.getItem('user');
+        let storedUser: User | null = null;
+        if (storedUserStr) {
+          try {
+            storedUser = JSON.parse(storedUserStr);
+          } catch (e) {
+            console.error('Failed to parse stored user after refresh', e);
+            localStorage.removeItem('user');
+          }
+        }
+
+        if (storedUser) {
+          setUser(storedUser);
+          return true;
+        }
+
         try {
-          const response = await fetch(`${config.apiBaseUrl}/public/profile/me`, {
+          const response = await fetch(`${config.apiBaseUrl}/account/me/${user?.userId}`, {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(accessToken ? { 'Authorization': `Bearer ${accessToken}` } : {})
+            },
             credentials: 'include',
           });
 
@@ -158,6 +185,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         const result = await response.json();
 
         if (result.accessToken) {
+          // Reset the refresh failure flag on successful login
+          resetRefreshFailureFlag();
+          
           setAccessToken(result.accessToken);
 
           const userData: User = {
@@ -292,6 +322,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
    * Called after user is redirected back from Google OAuth flow
    */
   const setTokenAndUser = useCallback((token: string, userData: User) => {
+    // Reset the refresh failure flag on successful OAuth login
+    resetRefreshFailureFlag();
+    
     setAccessToken(token);
     setUser(userData);
     localStorage.setItem('user', JSON.stringify(userData));

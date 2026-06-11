@@ -28,10 +28,15 @@ export const getAuthToken = (): string | null => {
   return currentAccessToken;
 };
 
+export const resetRefreshFailureFlag = () => {
+  hasHandledFailure = false;
+};
+
 // ========== Token Refresh Deduplication ==========
 let isRefreshing = false;
 let refreshPromise: Promise<boolean> | null = null;
 let failedQueue: QueuedRequest[] = [];
+let hasHandledFailure = false;
 
 /**
  * Process all queued requests after successful token refresh
@@ -62,14 +67,13 @@ const processQueue = (error: Error | null = null) => {
  */
 export const attemptRefresh = async (): Promise<boolean> => {
   // Already refreshing? Return existing promise
-  if (isRefreshing) {
-    // Wait for promise to be assigned
-    while (refreshPromise === null && isRefreshing) {
-      await new Promise(resolve => setTimeout(resolve, 0));
-    }
-    if (refreshPromise) {
-      return refreshPromise;
-    }
+  if (isRefreshing && refreshPromise) {
+    return refreshPromise;
+  }
+
+  // If we're already in a failed state, don't attempt again
+  if (hasHandledFailure) {
+    return false;
   }
 
   isRefreshing = true;
@@ -95,6 +99,7 @@ export const attemptRefresh = async (): Promise<boolean> => {
 
       if (data.accessToken) {
         currentAccessToken = data.accessToken;
+        hasHandledFailure = false; // Reset failure flag on success
         processQueue(); // Retry queued requests with new token
         return true;
       }
@@ -121,15 +126,23 @@ export const attemptRefresh = async (): Promise<boolean> => {
 /**
  * Handle terminal refresh failure:
  * - Clear local state
- * - Redirect to login
+ * - Set failure flag to prevent repeated attempts
+ * - Auth context will handle routing to login
  */
 const handleRefreshFailure = () => {
+  // Only handle failure once to prevent infinite loops
+  if (hasHandledFailure) {
+    return;
+  }
+  
+  hasHandledFailure = true;
+  
   // Clear tokens and user data
   currentAccessToken = null;
   localStorage.removeItem('user');
 
-  // Redirect to login
-  window.location.href = '/signin';
+  // Do NOT do hard redirect - let React handle the routing
+  // The app will detect isAuthenticated = false and redirect to /signin automatically
 };
 
 /**

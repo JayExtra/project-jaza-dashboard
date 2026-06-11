@@ -4,6 +4,7 @@ import {
   User, Bell, Sliders, CreditCard, Camera, Trash2, LogOut, Check, Sun, Moon, Laptop, ChevronDown, CheckCircle
 } from 'lucide-react';
 import config from '../lib/config';
+import { ProfileImageUploadDialog } from '../components/ProfileImageUploadDialog';
 
 export const SettingsPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -14,6 +15,10 @@ export const SettingsPage = () => {
   const [lastName, setLastName] = useState('Frederin');
   const [twoStep, setTwoStep] = useState(false);
   const [supportAccess, setSupportAccess] = useState(true);
+  
+  // Profile image state
+  const [profileImageUrl, setProfileImageUrl] = useState<string | null>(null);
+  const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
 
   // Parse user from localStorage
   let user = null;
@@ -32,6 +37,9 @@ export const SettingsPage = () => {
     if (user) {
       if (user.firstName) setFirstName(user.firstName);
       if (user.lastName) setLastName(user.lastName);
+      if (user.profileImage || user.profileImageUrl) {
+        setProfileImageUrl(user.profileImage || user.profileImageUrl);
+      }
     }
   }, []);
 
@@ -78,6 +86,17 @@ export const SettingsPage = () => {
         document.documentElement.classList.remove('dark');
       }
       localStorage.removeItem('theme');
+    }
+  };
+
+  // Handle profile image upload
+  const handleProfileImageUpload = (imageUrl: string) => {
+    setProfileImageUrl(imageUrl);
+    
+    // Update user in localStorage
+    if (user) {
+      const updatedUser = { ...user, profileImageUrl: imageUrl };
+      localStorage.setItem('user', JSON.stringify(updatedUser));
     }
   };
 
@@ -170,7 +189,7 @@ export const SettingsPage = () => {
                 <div className="relative group shrink-0">
                   <div className="w-24 h-24 rounded-full overflow-hidden border-2 border-primary bg-surface-low shadow-sm flex items-center justify-center">
                     <img 
-                      src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=200&h=200" 
+                      src={profileImageUrl || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=200&h=200"} 
                       alt="Profile Avatar"
                       className="w-full h-full object-cover object-center"
                     />
@@ -182,7 +201,9 @@ export const SettingsPage = () => {
 
                 <div className="flex flex-col gap-3 text-center sm:text-left">
                   <div className="flex flex-wrap gap-2 justify-center sm:justify-start">
-                    <button className="bg-primary text-on-primary hover:bg-primary/95 text-xs font-bold uppercase tracking-wider px-4 py-2.5 rounded-xl transition-colors">
+                    <button 
+                      onClick={() => setIsUploadDialogOpen(true)}
+                      className="bg-primary text-on-primary hover:bg-primary/95 text-xs font-bold uppercase tracking-wider px-4 py-2.5 rounded-xl transition-colors">
                       Change Image
                     </button>
                     <button className="bg-surface-low hover:bg-surface-low/75 text-foreground text-xs font-bold uppercase tracking-wider px-4 py-2.5 rounded-xl border border-border/10 transition-colors">
@@ -779,6 +800,13 @@ export const SettingsPage = () => {
           </div>
         )}
       </div>
+       {/* Profile Image Upload Dialog */}
+    <ProfileImageUploadDialog
+      isOpen={isUploadDialogOpen}
+      onClose={() => setIsUploadDialogOpen(false)}
+      onImageUpload={handleProfileImageUpload}
+      currentImageUrl={profileImageUrl || undefined}
+    />
     </div>
   );
 };

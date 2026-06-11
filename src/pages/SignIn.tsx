@@ -76,7 +76,7 @@ export const SignIn = () => {
     };
 
     handleGoogleCallback();
-  }, [isAuthenticated, navigate, setTokenAndUser]);
+  }, [isAuthenticated, navigate]);
 
   const {
     register,
