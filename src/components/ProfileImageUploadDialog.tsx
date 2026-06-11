@@ -1,7 +1,8 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Upload, X, AlertCircle, CheckCircle } from 'lucide-react';
 import config from '../lib/config';
-import { authenticatedFetch } from '../lib/api';
+import { useAuth } from '../hooks/useAuth';
+
 
 interface ProfileImageUploadDialogProps {
   isOpen: boolean;
@@ -29,23 +30,31 @@ export const ProfileImageUploadDialog = ({
   const [success, setSuccess] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [cropData, setCropData] = useState({ x: 0, y: 0 });
+  const { accessToken, user } = useAuth();
+  
+  // Pan offset: how much we've dragged the image from center (in canvas pixels)
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartRef = useRef({ x: 0, y: 0 });
+  const panStartRef = useRef({ x: 0, y: 0 });
+  
+  // Store scaled image dimensions
+  const imgDimsRef = useRef({ width: 0, height: 0 });
 
-  const AVATAR_SIZE = 200;
-  const CROP_CIRCLE_SIZE = 200;
+  const CANVAS_SIZE = 400;
+  const CROP_SIZE = 200;
+  const CROP_RADIUS = CROP_SIZE / 2;
+  const CROP_CENTER = CANVAS_SIZE / 2;
 
-  // Handle file selection
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Validate file type
     if (!file.type.startsWith('image/')) {
       setError('Please select an image file (PNG, JPEG, etc.)');
       return;
     }
 
-    // Validate file size (2MB max)
     if (file.size > 2 * 1024 * 1024) {
       setError('File size must be less than 2MB');
       return;
@@ -53,8 +62,8 @@ export const ProfileImageUploadDialog = ({
 
     setError(null);
     setSelectedFile(file);
+    setPan({ x: 0, y: 0 }); // Reset pan on new image
 
-    // Create preview
     const reader = new FileReader();
     reader.onload = (event) => {
       setPreview(event.target?.result as string);
@@ -62,7 +71,6 @@ export const ProfileImageUploadDialog = ({
     reader.readAsDataURL(file);
   };
 
-  // Handle drag and drop
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
@@ -71,32 +79,40 @@ export const ProfileImageUploadDialog = ({
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
-    
     const file = e.dataTransfer.files?.[0];
     if (file) {
-      const event = {
-        target: { files: [file] }
-      } as unknown as React.ChangeEvent<HTMLInputElement>;
+      const event = { target: { files: [file] } } as unknown as React.ChangeEvent<HTMLInputElement>;
       handleFileSelect(event);
     }
   };
 
-  // Handle mouse movement on preview for crop adjustment
-  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!preview) return;
-    
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-
-    // Draw preview with crop circle
-    drawCropPreview(x - CROP_CIRCLE_SIZE / 2, y - CROP_CIRCLE_SIZE / 2);
+  // Calculate scale so image covers the crop circle (like object-fit: cover)
+  const getCoverScale = (imgWidth: number, imgHeight: number) => {
+    return Math.max(CROP_SIZE / imgWidth, CROP_SIZE / imgHeight);
   };
 
-  const drawCropPreview = (x: number, y: number) => {
+  // Clamp pan values so image always fills the circle
+  const clampPan = (px: number, py: number, scaledW: number, scaledH: number) => {
+    // The image must always cover the crop circle area
+    // When pan=0, image is centered on canvas
+    // Image draw position = center - (scaled/2) + pan
+    // We need: drawX <= CROP_CENTER - CROP_RADIUS (left edge of circle)
+    // AND: drawX + scaledW >= CROP_CENTER + CROP_RADIUS (right edge)
+    
+    const minPanX = (CROP_CENTER - CROP_RADIUS) - (CROP_CENTER - scaledW / 2);
+    const maxPanX = (CROP_CENTER + CROP_RADIUS) - (CROP_CENTER + scaledW / 2);
+    
+    const minPanY = (CROP_CENTER - CROP_RADIUS) - (CROP_CENTER - scaledH / 2);
+    const maxPanY = (CROP_CENTER + CROP_RADIUS) - (CROP_CENTER + scaledH / 2);
+
+    return {
+      x: Math.max(maxPanX, Math.min(minPanX, px)), // Note: min/max swapped because pan is negative to move right
+      y: Math.max(maxPanY, Math.min(minPanY, py))
+    };
+  };
+
+  // Main draw function
+  const draw = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas || !preview) return;
 
@@ -105,88 +121,109 @@ export const ProfileImageUploadDialog = ({
 
     const img = new Image();
     img.onload = () => {
-      // Clear canvas
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const scale = getCoverScale(img.width, img.height);
+      const scaledW = img.width * scale;
+      const scaledH = img.height * scale;
+      imgDimsRef.current = { width: scaledW, height: scaledH };
 
-      // Calculate scaling
-      const scale = Math.max(AVATAR_SIZE / img.width, AVATAR_SIZE / img.height);
-      const scaledWidth = img.width * scale;
-      const scaledHeight = img.height * scale;
+      // Clamp current pan
+      const clamped = clampPan(pan.x, pan.y, scaledW, scaledH);
+      if (clamped.x !== pan.x || clamped.y !== pan.y) {
+        setPan(clamped);
+      }
 
-      // Clamp crop position
-      const clampedX = Math.max(0, Math.min(x, canvas.width - CROP_CIRCLE_SIZE));
-      const clampedY = Math.max(0, Math.min(y, canvas.height - CROP_CIRCLE_SIZE));
+      // Clear
+      ctx.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
 
-      setCropData({ x: clampedX, y: clampedY });
+      // Draw image centered on canvas, offset by pan
+      const drawX = CROP_CENTER - scaledW / 2 + clamped.x;
+      const drawY = CROP_CENTER - scaledH / 2 + clamped.y;
+      ctx.drawImage(img, drawX, drawY, scaledW, scaledH);
 
-      // Draw image
-      ctx.drawImage(
-        img,
-        clampedX - (scaledWidth - AVATAR_SIZE) / 2,
-        clampedY - (scaledHeight - AVATAR_SIZE) / 2,
-        scaledWidth,
-        scaledHeight
-      );
+      // Draw dark overlay with circular hole
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+      ctx.beginPath();
+      ctx.rect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+      ctx.arc(CROP_CENTER, CROP_CENTER, CROP_RADIUS, 0, Math.PI * 2, true);
+      ctx.fill();
 
-      // Draw circle overlay
+      // Draw circle border
       ctx.strokeStyle = '#3b82f6';
       ctx.lineWidth = 3;
       ctx.beginPath();
-      ctx.arc(
-        clampedX + CROP_CIRCLE_SIZE / 2,
-        clampedY + CROP_CIRCLE_SIZE / 2,
-        CROP_CIRCLE_SIZE / 2,
-        0,
-        Math.PI * 2
-      );
+      ctx.arc(CROP_CENTER, CROP_CENTER, CROP_RADIUS, 0, Math.PI * 2);
       ctx.stroke();
-
-      // Draw dark overlay outside circle
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-      // Clear the circle area
-      ctx.clearRect(clampedX, clampedY, CROP_CIRCLE_SIZE, CROP_CIRCLE_SIZE);
-
-      // Redraw image in circle area
-      ctx.save();
-      ctx.beginPath();
-      ctx.arc(
-        clampedX + CROP_CIRCLE_SIZE / 2,
-        clampedY + CROP_CIRCLE_SIZE / 2,
-        CROP_CIRCLE_SIZE / 2,
-        0,
-        Math.PI * 2
-      );
-      ctx.clip();
-      ctx.drawImage(
-        img,
-        clampedX - (scaledWidth - AVATAR_SIZE) / 2,
-        clampedY - (scaledHeight - AVATAR_SIZE) / 2,
-        scaledWidth,
-        scaledHeight
-      );
-      ctx.restore();
     };
     img.src = preview;
-  };
+  }, [preview, pan]);
 
-  // Initialize canvas preview
+  // Redraw when dependencies change
   useEffect(() => {
     if (!preview) return;
-
     const canvas = canvasRef.current;
     if (!canvas) return;
+    canvas.width = CANVAS_SIZE;
+    canvas.height = CANVAS_SIZE;
+    draw();
+  }, [preview, draw]);
 
-    // Set canvas size
-    canvas.width = 400;
-    canvas.height = 400;
+  // Mouse handlers
+  const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!preview) return;
+    setIsDragging(true);
+    dragStartRef.current = { x: e.clientX, y: e.clientY };
+    panStartRef.current = { ...pan };
+  };
 
-    // Draw initial preview
-    drawCropPreview(100, 100);
-  }, [preview]);
+  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!isDragging || !preview) return;
 
-  // Handle upload
+    const dx = e.clientX - dragStartRef.current.x;
+    const dy = e.clientY - dragStartRef.current.y;
+
+    const dims = imgDimsRef.current;
+    const newPan = clampPan(
+      panStartRef.current.x + dx,
+      panStartRef.current.y + dy,
+      dims.width,
+      dims.height
+    );
+
+    setPan(newPan);
+  };
+
+  const handleMouseUp = () => setIsDragging(false);
+  const handleMouseLeave = () => setIsDragging(false);
+
+  // Touch handlers
+  const handleTouchStart = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    if (!preview) return;
+    const touch = e.touches[0];
+    setIsDragging(true);
+    dragStartRef.current = { x: touch.clientX, y: touch.clientY };
+    panStartRef.current = { ...pan };
+  };
+
+  const handleTouchMove = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    if (!isDragging || !preview) return;
+    e.preventDefault();
+    const touch = e.touches[0];
+    const dx = touch.clientX - dragStartRef.current.x;
+    const dy = touch.clientY - dragStartRef.current.y;
+
+    const dims = imgDimsRef.current;
+    const newPan = clampPan(
+      panStartRef.current.x + dx,
+      panStartRef.current.y + dy,
+      dims.width,
+      dims.height
+    );
+    setPan(newPan);
+  };
+
+  const handleTouchEnd = () => setIsDragging(false);
+
+  // Upload: crop exactly what's in the circle
   const handleUpload = async () => {
     if (!selectedFile || !preview) {
       setError('Please select an image first');
@@ -197,122 +234,88 @@ export const ProfileImageUploadDialog = ({
     setError(null);
 
     try {
-      // Create cropped image
-      const canvas = canvasRef.current;
-      if (!canvas) {
+      const outCanvas = document.createElement('canvas');
+      outCanvas.width = CROP_SIZE;
+      outCanvas.height = CROP_SIZE;
+      const outCtx = outCanvas.getContext('2d');
+      if (!outCtx) {
         setError('Failed to process image');
         setIsUploading(false);
         return;
       }
 
-      // Get cropped canvas
-      const croppedCanvas = document.createElement('canvas');
-      croppedCanvas.width = CROP_CIRCLE_SIZE;
-      croppedCanvas.height = CROP_CIRCLE_SIZE;
-      const croppedCtx = croppedCanvas.getContext('2d');
-      if (!croppedCtx) {
-        setError('Failed to process image');
-        setIsUploading(false);
-        return;
-      }
-
-      // Draw circular image
       const img = new Image();
       img.onload = async () => {
-        // Calculate scaling
-        const scale = Math.max(AVATAR_SIZE / img.width, AVATAR_SIZE / img.height);
-        const scaledWidth = img.width * scale;
-        const scaledHeight = img.height * scale;
+        const scale = getCoverScale(img.width, img.height);
+        const scaledW = img.width * scale;
+        const scaledH = img.height * scale;
+        const clamped = clampPan(pan.x, pan.y, scaledW, scaledH);
 
-        // Create circular clipping path
-        croppedCtx.beginPath();
-        croppedCtx.arc(
-          CROP_CIRCLE_SIZE / 2,
-          CROP_CIRCLE_SIZE / 2,
-          CROP_CIRCLE_SIZE / 2,
-          0,
-          Math.PI * 2
-        );
-        croppedCtx.clip();
+        // Circular clip
+        outCtx.beginPath();
+        outCtx.arc(CROP_RADIUS, CROP_RADIUS, CROP_RADIUS, 0, Math.PI * 2);
+        outCtx.clip();
 
-        // Draw image
-        croppedCtx.drawImage(
-          img,
-          cropData.x - (scaledWidth - AVATAR_SIZE) / 2,
-          cropData.y - (scaledHeight - AVATAR_SIZE) / 2,
-          scaledWidth,
-          scaledHeight
-        );
+        // Draw the portion of image that was under the crop circle
+        // In preview: image drawn at (CENTER - scaled/2 + pan)
+        // Crop circle center is at CROP_CENTER
+        // We want the pixel at crop center to map to CROP_RADIUS in output
+        const srcX = CROP_CENTER - scaledW / 2 + clamped.x;
+        const srcY = CROP_CENTER - scaledH / 2 + clamped.y;
+        
+        // dest = src shifted so crop center becomes (RADIUS, RADIUS)
+        const destX = srcX - (CROP_CENTER - CROP_RADIUS);
+        const destY = srcY - (CROP_CENTER - CROP_RADIUS);
 
-        // Convert to blob
-        croppedCanvas.toBlob(async (blob) => {
+        outCtx.drawImage(img, destX, destY, scaledW, scaledH);
+
+        outCanvas.toBlob(async (blob) => {
           if (!blob) {
             setError('Failed to process image');
             setIsUploading(false);
             return;
           }
 
-          try {
-            // Create FormData
-            const formData = new FormData();
-            formData.append('image', blob, 'profile-image.png');
+          const formData = new FormData();
+          formData.append('image', blob, 'profile-image.png');
 
-            // Upload with progress
-            const xhr = new XMLHttpRequest();
+          const xhr = new XMLHttpRequest();
+          xhr.upload.addEventListener('progress', (e) => {
+            if (e.lengthComputable) {
+              setUploadProgress((e.loaded / e.total) * 100);
+            }
+          });
 
-            xhr.upload.addEventListener('progress', (e) => {
-              if (e.lengthComputable) {
-                const percentComplete = (e.loaded / e.total) * 100;
-                setUploadProgress(percentComplete);
-              }
-            });
-
-            xhr.addEventListener('load', async () => {
-              if (xhr.status >= 200 && xhr.status < 300) {
-                try {
-                  const response = JSON.parse(xhr.responseText) as UploadResponse;
-                  setSuccess(true);
-                  onImageUpload(response.imageUrl);
-
-                  // Close dialog after 2 seconds
-                  setTimeout(() => {
-                    handleClose();
-                  }, 2000);
-                } catch (e) {
-                  setError('Failed to parse upload response');
-                  setIsUploading(false);
-                }
-              } else {
-                try {
-                  const errorData = JSON.parse(xhr.responseText);
-                  setError(
-                    errorData.message ||
-                    errorData.error ||
-                    'Upload failed. Please try again.'
-                  );
-                } catch {
-                  setError('Upload failed. Please try again.');
-                }
+          xhr.addEventListener('load', () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+              try {
+                const response = JSON.parse(xhr.responseText) as UploadResponse;
+                setSuccess(true);
+                onImageUpload(response.imageUrl);
+                setTimeout(() => handleClose(), 2000);
+              } catch {
+                setError('Failed to parse upload response');
                 setIsUploading(false);
               }
-            });
-
-            xhr.addEventListener('error', () => {
-              setError('Network error during upload');
+            } else {
+              try {
+                const errorData = JSON.parse(xhr.responseText);
+                setError(errorData.message || errorData.error || 'Upload failed');
+              } catch {
+                setError('Upload failed. Please try again.');
+              }
               setIsUploading(false);
-            });
-
-            // Get token
-            const token = localStorage.getItem('accessToken');
-            xhr.open('POST', `${config.apiBaseUrl}/account/upload-picture`);
-            if (token) {
-              xhr.setRequestHeader('Authorization', `Bearer ${token}`);
             }
-            xhr.send(formData);
-          } catch (err) {
-            setError(err instanceof Error ? err.message : 'Upload failed');
+          });
+
+          xhr.addEventListener('error', () => {
+            setError('Network error during upload');
             setIsUploading(false);
-          }
+          });
+
+          xhr.open('POST', `${config.apiBaseUrl}/account/upload-picture`);
+          if (accessToken) xhr.setRequestHeader('Authorization', `Bearer ${accessToken}`);
+          xhr.send(formData);
         }, 'image/png');
       };
       img.src = preview;
@@ -328,10 +331,9 @@ export const ProfileImageUploadDialog = ({
     setError(null);
     setSuccess(false);
     setUploadProgress(0);
-    setUploadProgress(0);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
+    setPan({ x: 0, y: 0 });
+    setIsDragging(false);
+    if (fileInputRef.current) fileInputRef.current.value = '';
     onClose();
   };
 
@@ -339,16 +341,9 @@ export const ProfileImageUploadDialog = ({
 
   return (
     <>
-      {/* Backdrop */}
-      <div
-        className="fixed inset-0 bg-black/30 backdrop-blur-sm z-40"
-        onClick={handleClose}
-      />
-
-      {/* Dialog */}
+      <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-40" onClick={handleClose} />
       <div className="fixed inset-0 flex items-center justify-center z-50 p-4">
         <div className="bg-surface-lowest rounded-3xl shadow-lg max-w-lg w-full border border-border/10 overflow-hidden">
-          {/* Header */}
           <div className="flex items-center justify-between p-6 border-b border-border/10">
             <h2 className="text-xl font-bold text-foreground">Change Profile Image</h2>
             <button
@@ -360,9 +355,7 @@ export const ProfileImageUploadDialog = ({
             </button>
           </div>
 
-          {/* Content */}
           <div className="p-6 space-y-6">
-            {/* Error Alert */}
             {error && (
               <div className="flex items-start gap-3 p-4 bg-red-500/10 border border-red-500/20 rounded-xl">
                 <AlertCircle size={18} className="text-red-500 shrink-0 mt-0.5" />
@@ -370,7 +363,6 @@ export const ProfileImageUploadDialog = ({
               </div>
             )}
 
-            {/* Success Alert */}
             {success && (
               <div className="flex items-start gap-3 p-4 bg-green-500/10 border border-green-500/20 rounded-xl">
                 <CheckCircle size={18} className="text-green-500 shrink-0 mt-0.5" />
@@ -380,7 +372,6 @@ export const ProfileImageUploadDialog = ({
 
             {!preview ? (
               <>
-                {/* File Input */}
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -388,8 +379,6 @@ export const ProfileImageUploadDialog = ({
                   onChange={handleFileSelect}
                   className="hidden"
                 />
-
-                {/* Drag & Drop Area */}
                 <div
                   onDragOver={handleDragOver}
                   onDrop={handleDrop}
@@ -407,19 +396,26 @@ export const ProfileImageUploadDialog = ({
               </>
             ) : (
               <>
-                {/* Image Crop Preview */}
                 <div>
                   <label className="text-xs font-bold text-foreground/60 mb-3 block tracking-widest uppercase">
-                    Crop Image - Click and drag to adjust
+                    Crop Image — Click and drag to adjust
                   </label>
                   <canvas
                     ref={canvasRef}
+                    onMouseDown={handleMouseDown}
                     onMouseMove={handleMouseMove}
-                    className="w-full bg-surface-low rounded-xl cursor-crosshair border border-border/10"
+                    onMouseUp={handleMouseUp}
+                    onMouseLeave={handleMouseLeave}
+                    onTouchStart={handleTouchStart}
+                    onTouchMove={handleTouchMove}
+                    onTouchEnd={handleTouchEnd}
+                    className={`w-full bg-surface-low rounded-xl border border-border/10 select-none ${
+                      isDragging ? 'cursor-grabbing' : 'cursor-grab'
+                    }`}
+                    style={{ touchAction: 'none' }}
                   />
                 </div>
 
-                {/* Upload Progress */}
                 {isUploading && (
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
@@ -440,7 +436,6 @@ export const ProfileImageUploadDialog = ({
             )}
           </div>
 
-          {/* Footer */}
           <div className="flex gap-3 p-6 border-t border-border/10 bg-surface-low/30">
             <button
               onClick={handleClose}
