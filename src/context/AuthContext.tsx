@@ -11,6 +11,8 @@ export interface User {
   role?: string;
   emailVerified: boolean;
   organisation?: string;
+  profileImage?: string;
+  profileImageUrl?: string;
 }
 
 export interface AuthContextType {
@@ -198,6 +200,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             role: result.role,
             emailVerified: result.emailVerified,
             organisation: result.organisation,
+            profileImage: result.profileImage || result.imageUrl,
+            profileImageUrl: result.profileImageUrl || result.imageUrl || result.thumbnailUrl,
           };
 
           setUser(userData);
@@ -260,6 +264,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
               role: result.role,
               emailVerified: result.emailVerified,
               organisation: result.organisation,
+              profileImage: result.profileImage || result.imageUrl,
+              profileImageUrl: result.profileImageUrl || result.imageUrl || result.thumbnailUrl,
             };
             setUser(user);
             localStorage.setItem('user', JSON.stringify(user));

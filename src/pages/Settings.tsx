@@ -1,18 +1,24 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { 
-  User, Bell, Sliders, CreditCard, Camera, Trash2, LogOut, Check, Sun, Moon, Laptop, ChevronDown, CheckCircle
+  User, Bell, Sliders, CreditCard, Camera, Trash2, LogOut, Check, Sun, Moon, Laptop, ChevronDown, CheckCircle,
+  Loader2, Eye, EyeOff, X
 } from 'lucide-react';
 import config from '../lib/config';
 import { ProfileImageUploadDialog } from '../components/ProfileImageUploadDialog';
+import { useAuth } from '../hooks/useAuth';
+import { authenticatedFetch } from '../lib/api';
 
 export const SettingsPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = searchParams.get('tab') || 'account';
 
+  const { user, updateUser, accessToken } = useAuth();
+
   // State values for forms and settings
-  const [firstName, setFirstName] = useState('Brian');
-  const [lastName, setLastName] = useState('Frederin');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [emailInput, setEmailInput] = useState('');
   const [twoStep, setTwoStep] = useState(false);
   const [supportAccess, setSupportAccess] = useState(true);
   
@@ -20,28 +26,318 @@ export const SettingsPage = () => {
   const [profileImageUrl, setProfileImageUrl] = useState<string | null>(null);
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
 
-  // Parse user from localStorage
-  let user = null;
-  try {
-    const userStr = localStorage.getItem('user');
-    if (userStr) {
-      user = JSON.parse(userStr);
-    }
-  } catch (e) {
-    console.error('Failed to parse user from localStorage', e);
-  }
+  // Profile update loading/status states
+  const [isProfileLoading, setIsProfileLoading] = useState(false);
+  const [isProfileUpdating, setIsProfileUpdating] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
+  const [profileSuccess, setProfileSuccess] = useState<string | null>(null);
 
-  const userEmail = user?.email || 'brianfrederin@email.com';
+  // Password change states
+  const [passwordFlowStep, setPasswordFlowStep] = useState<'idle' | 'otp_verification' | 'new_password'>('idle');
+  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+  const [otpValue, setOtpValue] = useState(['', '', '', '', '']);
+  const [verifiedToken, setVerifiedToken] = useState('');
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
+  const [isPasswordLoading, setIsPasswordLoading] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+  const userEmail = user?.email || emailInput || 'brianfrederin@email.com';
 
   useEffect(() => {
-    if (user) {
-      if (user.firstName) setFirstName(user.firstName);
-      if (user.lastName) setLastName(user.lastName);
-      if (user.profileImage || user.profileImageUrl) {
-        setProfileImageUrl(user.profileImage || user.profileImageUrl);
-      }
+    let timer: number;
+    if (resendCooldown > 0) {
+      timer = window.setInterval(() => setResendCooldown(c => c - 1), 1000);
     }
-  }, []);
+    return () => window.clearInterval(timer);
+  }, [resendCooldown]);
+
+  useEffect(() => {
+    const fetchLatestProfile = async () => {
+      if (!user?.userId || !accessToken) return;
+      setIsProfileLoading(true);
+      try {
+        const response = await authenticatedFetch(`${config.apiBaseUrl}/account/me/${user.userId}`, {
+          method: 'GET'
+        });
+        if (response.ok) {
+          const resData = await response.json();
+          if (resData.data) {
+            const uData = resData.data;
+            // Update AuthContext and LocalStorage
+            console.log('Fetched latest user profile:', uData);
+            updateUser({
+              firstName: uData.firstName,
+              lastName: uData.lastName,
+              email: uData.email,
+              profileImage: uData.imageUrl || uData.thumbnailUrl,
+              profileImageUrl: uData.imageUrl || uData.thumbnailUrl,
+              emailVerified: uData.isEmailVerified !== undefined ? uData.isEmailVerified : user.emailVerified
+            });
+            // Set local component states
+            setFirstName(uData.firstName || '');
+            setLastName(uData.lastName || '');
+            setEmailInput(uData.email || '');
+            setProfileImageUrl(uData.imageUrl || uData.thumbnailUrl || null);
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching latest user profile:', err);
+      } finally {
+        setIsProfileLoading(false);
+      }
+    };
+
+    if (user) {
+      setFirstName(user.firstName || '');
+      setLastName(user.lastName || '');
+      setEmailInput(user.email || '');
+      setProfileImageUrl(user.profileImageUrl || user.profileImage || null);
+    }
+
+    fetchLatestProfile();
+  }, [user?.userId, accessToken]);
+
+  const handleSaveProfile = async () => {
+    if (!firstName.trim() || !lastName.trim() || !emailInput.trim()) {
+      setProfileError('First name, last name, and email are required.');
+      return;
+    }
+    setIsProfileUpdating(true);
+    setProfileError(null);
+    setProfileSuccess(null);
+    try {
+      console.log('Saving profile with:', { firstName, lastName, email: emailInput });
+      const response = await authenticatedFetch(`${config.apiBaseUrl}/account/update-profile`, {
+        method: 'POST',
+        body: JSON.stringify({
+          userId: user?.userId,
+          firstName,
+          lastName,
+          email: emailInput
+        })
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        let errMsg = 'Failed to update profile. Please try again.';
+        try {
+          const result = JSON.parse(errText);
+          errMsg = result.message || errMsg;
+        } catch {
+          errMsg = errText || errMsg;
+        }
+        setProfileError(errMsg);
+        return;
+      }
+
+      const result = await response.json();
+      const updatedData = result.data;
+      if (updatedData) {
+        updateUser({
+          firstName: updatedData.firstName,
+          lastName: updatedData.lastName,
+          email: updatedData.email,
+          profileImage: updatedData.imageUrl || updatedData.thumbnailUrl,
+          profileImageUrl: updatedData.imageUrl || updatedData.thumbnailUrl
+        });
+        setProfileSuccess('Profile details updated successfully!');
+        setTimeout(() => setProfileSuccess(null), 3000);
+      } else {
+        setProfileError('Invalid response received from server.');
+      }
+    } catch (err) {
+      setProfileError('An unexpected error occurred. Please try again later.');
+    } finally {
+      setIsProfileUpdating(false);
+    }
+  };
+
+  const handleTriggerPasswordOtp = async () => {
+    setIsPasswordLoading(true);
+    setPasswordError(null);
+    setPasswordSuccess(null);
+    try {
+      const response = await authenticatedFetch(`${config.apiBaseUrl}/account/password/otp`, {
+        method: 'POST'
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        let errMsg = 'Failed to send OTP. Please try again.';
+        try {
+          const result = JSON.parse(errText);
+          errMsg = result.message || errMsg;
+        } catch {
+          errMsg = errText || errMsg;
+        }
+        setPasswordError(errMsg);
+        return;
+      }
+
+      setOtpValue(['', '', '', '', '']);
+      setResendCooldown(60);
+      setPasswordFlowStep('otp_verification');
+      setIsPasswordModalOpen(true);
+    } catch (err) {
+      setPasswordError('An unexpected error occurred. Please try again.');
+    } finally {
+      setIsPasswordLoading(false);
+    }
+  };
+
+  const handlePasswordButtonClick = () => {
+    if (resendCooldown > 0) {
+      setIsPasswordModalOpen(true);
+      setPasswordFlowStep('otp_verification');
+    } else {
+      handleTriggerPasswordOtp();
+    }
+  };
+
+  const handleResendPasswordOtp = async () => {
+    if (resendCooldown > 0) return;
+    await handleTriggerPasswordOtp();
+  };
+
+  const handleVerifyPasswordOtp = async () => {
+    const otp = otpValue.join('');
+    if (otp.length !== 5) {
+      setPasswordError('Please enter a 5-digit code.');
+      return;
+    }
+    setIsPasswordLoading(true);
+    setPasswordError(null);
+    try {
+      const response = await authenticatedFetch(`${config.apiBaseUrl}/account/password/verify-otp`, {
+        method: 'POST',
+        body: JSON.stringify({
+          email: user?.email || emailInput,
+          otp
+        })
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        let errMsg = 'Invalid OTP. Please check and try again.';
+        try {
+          const result = JSON.parse(errText);
+          errMsg = result.message || errMsg;
+        } catch {
+          errMsg = errText || errMsg;
+        }
+        setPasswordError(errMsg);
+        return;
+      }
+
+      const result = await response.json();
+      if (result.verifiedToken) {
+        setVerifiedToken(result.verifiedToken);
+        setPasswordFlowStep('new_password');
+      } else {
+        setPasswordError('Failed to verify OTP. Please try again.');
+      }
+    } catch (err) {
+      setPasswordError('An unexpected error occurred. Please try again.');
+    } finally {
+      setIsPasswordLoading(false);
+    }
+  };
+
+  const handleUpdatePassword = async () => {
+    if (!currentPassword) {
+      setPasswordError('Please enter your current password.');
+      return;
+    }
+    if (newPassword.length < 6) {
+      setPasswordError('New password must be at least 6 characters long.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError('New passwords do not match.');
+      return;
+    }
+    setIsPasswordLoading(true);
+    setPasswordError(null);
+    try {
+      console.log('Submitting password change with:', { currentPassword, newPassword, verifiedToken });
+      const response = await authenticatedFetch(`${config.apiBaseUrl}/account/password/change`, {
+        method: 'POST',
+        body: JSON.stringify({
+          currentPassword,
+          newPassword,
+          verifiedToken
+        })
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        let errMsg = 'Failed to change password. Please try again.';
+        try {
+          const result = JSON.parse(errText);
+          errMsg = result.message || errMsg;
+        } catch {
+          errMsg = errText || errMsg;
+        }
+        setPasswordError(errMsg);
+        return;
+      }
+
+      setPasswordSuccess('Password updated successfully!');
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setVerifiedToken('');
+      setOtpValue(['', '', '', '', '']);
+      
+      setTimeout(() => {
+        setPasswordSuccess(null);
+        setPasswordFlowStep('idle');
+        setIsPasswordModalOpen(false);
+      }, 3000);
+    } catch (err) {
+      setPasswordError('An unexpected error occurred. Please try again.');
+    } finally {
+      setIsPasswordLoading(false);
+    }
+  };
+
+  const handleOtpChange = (index: number, value: string) => {
+    if (!/^\d*$/.test(value)) return;
+    
+    const newOtp = [...otpValue];
+    if (value.length > 1) {
+      const pasted = value.slice(0, 5).split('');
+      for (let i = 0; i < pasted.length; i++) {
+        if (index + i < 5) newOtp[index + i] = pasted[i];
+      }
+      setOtpValue(newOtp);
+      const focusIndex = Math.min(index + pasted.length, 4);
+      otpRefs.current[focusIndex]?.focus();
+      return;
+    }
+
+    newOtp[index] = value;
+    setOtpValue(newOtp);
+
+    if (value !== '' && index < 4) {
+      otpRefs.current[index + 1]?.focus();
+    }
+  };
+
+  const handleOtpKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Backspace' && otpValue[index] === '' && index > 0) {
+      otpRefs.current[index - 1]?.focus();
+    }
+  };
 
   // Update URL active tab
   const handleTabChange = (tab: string) => {
@@ -92,12 +388,7 @@ export const SettingsPage = () => {
   // Handle profile image upload
   const handleProfileImageUpload = (imageUrl: string) => {
     setProfileImageUrl(imageUrl);
-    
-    // Update user in localStorage
-    if (user) {
-      const updatedUser = { ...user, profileImageUrl: imageUrl };
-      localStorage.setItem('user', JSON.stringify(updatedUser));
-    }
+    updateUser({ profileImageUrl: imageUrl, profileImage: imageUrl });
   };
 
   return (
@@ -226,7 +517,7 @@ export const SettingsPage = () => {
                     type="text"
                     value={firstName}
                     onChange={(e) => setFirstName(e.target.value)}
-                    placeholder="Brian"
+                    placeholder="First name"
                     className="w-full bg-surface-container-highest border-transparent rounded-xl px-4 py-3.5 text-sm focus:outline-none focus:ring-0 focus:bg-surface-container-lowest focus:border-l-2 focus:border-l-primary transition-all text-foreground"
                   />
                 </div>
@@ -238,10 +529,45 @@ export const SettingsPage = () => {
                     type="text"
                     value={lastName}
                     onChange={(e) => setLastName(e.target.value)}
-                    placeholder="Frederin"
+                    placeholder="Last name"
                     className="w-full bg-surface-container-highest border-transparent rounded-xl px-4 py-3.5 text-sm focus:outline-none focus:ring-0 focus:bg-surface-container-lowest focus:border-l-2 focus:border-l-primary transition-all text-foreground"
                   />
                 </div>
+                <div className="md:col-span-2">
+                  <label className="block text-[10px] font-bold text-foreground/60 mb-2 tracking-widest uppercase">
+                    Email Address
+                  </label>
+                  <input
+                    type="email"
+                    value={emailInput}
+                    onChange={(e) => setEmailInput(e.target.value)}
+                    placeholder="email@example.com"
+                    className="w-full bg-surface-container-highest border-transparent rounded-xl px-4 py-3.5 text-sm focus:outline-none focus:ring-0 focus:bg-surface-container-lowest focus:border-l-2 focus:border-l-primary transition-all text-foreground"
+                  />
+                </div>
+              </div>
+
+              {profileError && (
+                <div className="text-xs text-red-500 font-medium pt-2 animate-in fade-in">
+                  {profileError}
+                </div>
+              )}
+
+              {profileSuccess && (
+                <div className="text-xs text-emerald-500 font-medium pt-2 animate-in fade-in">
+                  {profileSuccess}
+                </div>
+              )}
+
+              <div className="flex justify-end pt-2">
+                <button
+                  onClick={handleSaveProfile}
+                  disabled={isProfileUpdating || isProfileLoading}
+                  className="bg-primary text-on-primary hover:bg-primary/95 disabled:opacity-50 text-xs font-bold uppercase tracking-wider px-5 py-3 rounded-xl transition-colors flex items-center gap-2 shadow-sm"
+                >
+                  {isProfileUpdating && <Loader2 size={12} className="animate-spin" />}
+                  Save Profile Changes
+                </button>
               </div>
             </div>
 
@@ -249,30 +575,49 @@ export const SettingsPage = () => {
             <div className="space-y-6">
               <h2 className="text-lg font-bold tracking-tight">Account Security</h2>
               <div className="space-y-4">
-                {/* Email address Card */}
+                {/* Email address Card (Read Only summary) */}
                 <div className="bg-surface-low/40 rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div>
                     <span className="block text-[10px] font-bold text-foreground/50 tracking-widest uppercase mb-1">
-                      Email Address
+                      Registered Email
                     </span>
                     <span className="text-sm font-medium text-foreground">{userEmail}</span>
                   </div>
-                  <button className="bg-surface-low hover:bg-surface-low/80 text-foreground px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors border border-border/10 shrink-0">
-                    Change email
-                  </button>
+                  <span className="text-[10px] text-foreground/40 font-bold uppercase tracking-wider bg-surface-low px-2.5 py-1 rounded-lg border border-border/10 shrink-0">
+                    Primary Contact
+                  </span>
                 </div>
 
                 {/* Password Card */}
-                <div className="bg-surface-low/40 rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div>
-                    <span className="block text-[10px] font-bold text-foreground/50 tracking-widest uppercase mb-1">
-                      Password
-                    </span>
-                    <span className="text-sm tracking-widest font-mono text-foreground/60">••••••••</span>
+                <div className="bg-surface-low/40 rounded-2xl p-5 flex flex-col gap-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                      <span className="block text-[10px] font-bold text-foreground/50 tracking-widest uppercase mb-1">
+                        Password
+                      </span>
+                      <span className="text-sm tracking-widest font-mono text-foreground/60">••••••••</span>
+                    </div>
+                    <button
+                      onClick={handlePasswordButtonClick}
+                      disabled={isPasswordLoading}
+                      className="bg-surface-low hover:bg-surface-low/80 disabled:opacity-50 text-foreground px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors border border-border/10 shrink-0 flex items-center gap-2"
+                    >
+                      {isPasswordLoading && <Loader2 size={12} className="animate-spin" />}
+                      {resendCooldown > 0 ? 'Enter Verification Code' : 'Change password'}
+                    </button>
                   </div>
-                  <button className="bg-surface-low hover:bg-surface-low/80 text-foreground px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors border border-border/10 shrink-0">
-                    Change password
-                  </button>
+
+                  {resendCooldown > 0 && (
+                    <p className="text-xs text-foreground/40 font-medium">
+                      An OTP has been sent to your email. You can request another one in {resendCooldown} seconds.
+                    </p>
+                  )}
+
+                  {passwordError && passwordFlowStep === 'idle' && (
+                    <div className="text-xs text-red-500 font-medium">
+                      {passwordError}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -800,13 +1145,188 @@ export const SettingsPage = () => {
           </div>
         )}
       </div>
-       {/* Profile Image Upload Dialog */}
-    <ProfileImageUploadDialog
-      isOpen={isUploadDialogOpen}
-      onClose={() => setIsUploadDialogOpen(false)}
-      onImageUpload={handleProfileImageUpload}
-      currentImageUrl={profileImageUrl || undefined}
-    />
+
+      {/* Profile Image Upload Dialog */}
+      <ProfileImageUploadDialog
+        isOpen={isUploadDialogOpen}
+        onClose={() => setIsUploadDialogOpen(false)}
+        onImageUpload={handleProfileImageUpload}
+        currentImageUrl={profileImageUrl || undefined}
+      />
+
+      {/* PASSWORD CHANGE MODAL — placed here, right before the final closing </div> */}
+      {isPasswordModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-surface-lowest rounded-2xl shadow-xl w-full max-w-md p-6 md:p-8 space-y-6 animate-in fade-in zoom-in-95 duration-200">
+            
+            {/* Modal Header */}
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-bold tracking-tight">
+                  {passwordFlowStep === 'otp_verification' ? 'Verify Your Identity' : 'Set New Password'}
+                </h3>
+                <p className="text-xs text-foreground/60 mt-1">
+                  {passwordFlowStep === 'otp_verification' 
+                    ? `Enter the 5-digit code sent to ${userEmail}` 
+                    : 'Create a strong password for your account'}
+                </p>
+              </div>
+              <button 
+                onClick={() => {
+                  setIsPasswordModalOpen(false);
+                  setPasswordFlowStep('idle');
+                  setPasswordError(null);
+                  setPasswordSuccess(null);
+                }}
+                className="p-2 rounded-lg hover:bg-surface-low transition-colors text-foreground/50 hover:text-foreground"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* OTP Verification Step */}
+            {passwordFlowStep === 'otp_verification' && (
+              <div className="space-y-6">
+                <div className="flex justify-center gap-3">
+                  {otpValue.map((digit, index) => (
+                    <input
+                      key={index}
+                      ref={el => otpRefs.current[index] = el}
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={1}
+                      value={digit}
+                      onChange={(e) => handleOtpChange(index, e.target.value)}
+                      onKeyDown={(e) => handleOtpKeyDown(index, e)}
+                      className="w-12 h-14 text-center text-lg font-bold bg-surface-container-highest border-2 border-transparent rounded-xl focus:outline-none focus:border-primary focus:bg-surface-container-lowest transition-all text-foreground"
+                    />
+                  ))}
+                </div>
+
+                {passwordError && (
+                  <div className="text-xs text-red-500 font-medium text-center animate-in fade-in">
+                    {passwordError}
+                  </div>
+                )}
+
+                <div className="flex flex-col gap-3">
+                  <button
+                    onClick={handleVerifyPasswordOtp}
+                    disabled={isPasswordLoading || otpValue.join('').length !== 5}
+                    className="w-full bg-primary text-on-primary hover:bg-primary/95 disabled:opacity-50 text-xs font-bold uppercase tracking-wider px-5 py-3.5 rounded-xl transition-colors flex items-center justify-center gap-2"
+                  >
+                    {isPasswordLoading && <Loader2 size={14} className="animate-spin" />}
+                    Verify Code
+                  </button>
+                  
+                  <button
+                    onClick={handleResendPasswordOtp}
+                    disabled={resendCooldown > 0 || isPasswordLoading}
+                    className="text-xs font-bold text-primary hover:text-primary/80 disabled:text-foreground/30 uppercase tracking-wider transition-colors text-center py-2"
+                  >
+                    {resendCooldown > 0 ? `Resend OTP in ${resendCooldown}s` : 'Resend OTP'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* New Password Step */}
+            {passwordFlowStep === 'new_password' && (
+              <div className="space-y-4">
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-[10px] font-bold text-foreground/60 mb-2 tracking-widest uppercase">
+                      Current Password
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showCurrentPassword ? 'text' : 'password'}
+                        value={currentPassword}
+                        onChange={(e) => setCurrentPassword(e.target.value)}
+                        placeholder="Enter current password"
+                        className="w-full bg-surface-container-highest border-transparent rounded-xl px-4 py-3.5 text-sm focus:outline-none focus:ring-0 focus:bg-surface-container-lowest focus:border-l-2 focus:border-l-primary transition-all text-foreground pr-10"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-foreground/40 hover:text-foreground transition-colors"
+                      >
+                        {showCurrentPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-foreground/60 mb-2 tracking-widest uppercase">
+                      New Password
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showNewPassword ? 'text' : 'password'}
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        placeholder="Min 6 characters"
+                        className="w-full bg-surface-container-highest border-transparent rounded-xl px-4 py-3.5 text-sm focus:outline-none focus:ring-0 focus:bg-surface-container-lowest focus:border-l-2 focus:border-l-primary transition-all text-foreground pr-10"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowNewPassword(!showNewPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-foreground/40 hover:text-foreground transition-colors"
+                      >
+                        {showNewPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-foreground/60 mb-2 tracking-widest uppercase">
+                      Confirm New Password
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showConfirmPassword ? 'text' : 'password'}
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        placeholder="Re-enter new password"
+                        className="w-full bg-surface-container-highest border-transparent rounded-xl px-4 py-3.5 text-sm focus:outline-none focus:ring-0 focus:bg-surface-container-lowest focus:border-l-2 focus:border-l-primary transition-all text-foreground pr-10"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-foreground/40 hover:text-foreground transition-colors"
+                      >
+                        {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {passwordError && (
+                  <div className="text-xs text-red-500 font-medium animate-in fade-in">
+                    {passwordError}
+                  </div>
+                )}
+
+                {passwordSuccess && (
+                  <div className="text-xs text-emerald-500 font-medium animate-in fade-in flex items-center gap-1.5">
+                    <CheckCircle size={14} />
+                    {passwordSuccess}
+                  </div>
+                )}
+
+                <button
+                  onClick={handleUpdatePassword}
+                  disabled={isPasswordLoading || !currentPassword || !newPassword || !confirmPassword || newPassword !== confirmPassword}
+                  className="w-full bg-primary text-on-primary hover:bg-primary/95 disabled:opacity-50 text-xs font-bold uppercase tracking-wider px-5 py-3.5 rounded-xl transition-colors flex items-center justify-center gap-2"
+                >
+                  {isPasswordLoading && <Loader2 size={14} className="animate-spin" />}
+                  Update Password
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
