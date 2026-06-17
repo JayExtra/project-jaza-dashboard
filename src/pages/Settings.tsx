@@ -8,6 +8,8 @@ import config from '../lib/config';
 import { ProfileImageUploadDialog } from '../components/ProfileImageUploadDialog';
 import { useAuth } from '../hooks/useAuth';
 import { authenticatedFetch } from '../lib/api';
+import type { Settings } from '../types/settings';
+import { defaultSettings } from '../types/settings';
 
 export const SettingsPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -19,9 +21,7 @@ export const SettingsPage = () => {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [emailInput, setEmailInput] = useState('');
-  const [twoStep, setTwoStep] = useState(false);
-  const [supportAccess, setSupportAccess] = useState(true);
-  
+ 
   // Profile image state
   const [profileImageUrl, setProfileImageUrl] = useState<string | null>(null);
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
@@ -41,6 +41,7 @@ export const SettingsPage = () => {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [settingsError, setSettingsError] = useState<string | null>(null);
   const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
   const [isPasswordLoading, setIsPasswordLoading] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
@@ -51,6 +52,11 @@ export const SettingsPage = () => {
   const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   const userEmail = user?.email || emailInput || 'brianfrederin@email.com';
+
+  // Notification Settings States
+  const [settings, setSettings] = useState<Settings>(defaultSettings);
+  const [originalSettings ,  setOriginalSettings] = useState<Settings>(defaultSettings);
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     let timer: number;
@@ -74,13 +80,19 @@ export const SettingsPage = () => {
             const uData = resData.data;
             // Update AuthContext and LocalStorage
             console.log('Fetched latest user profile:', uData);
+            if (uData.settings) {
+            const loadedSettings = uData.settings as Settings;
+            setSettings(loadedSettings);
+            setOriginalSettings(loadedSettings); // Update original to match!
+          }
             updateUser({
               firstName: uData.firstName,
               lastName: uData.lastName,
               email: uData.email,
               profileImage: uData.imageUrl || uData.thumbnailUrl,
               profileImageUrl: uData.imageUrl || uData.thumbnailUrl,
-              emailVerified: uData.isEmailVerified !== undefined ? uData.isEmailVerified : user.emailVerified
+              emailVerified: uData.isEmailVerified !== undefined ? uData.isEmailVerified : user.emailVerified,
+              settings: uData.settings || user.settings || defaultSettings
             });
             // Set local component states
             setFirstName(uData.firstName || '');
@@ -344,14 +356,59 @@ export const SettingsPage = () => {
     setSearchParams({ tab });
   };
 
-  // Notification States
-  const [emailPromo, setEmailPromo] = useState(false);
-  const [emailSecurity, setEmailSecurity] = useState(true);
-  const [emailBilling, setEmailBilling] = useState(true);
-  const [mobileCampaign, setMobileCampaign] = useState(true);
-  const [mobileMentions, setMobileMentions] = useState(true);
-  const [pcAlerts, setPcAlerts] = useState(true);
-  const [pcSound, setPcSound] = useState(false);
+
+const [pcAlerts, setPcAlerts] = useState(true);
+const [pcSound, setPcSound] = useState(false);
+
+function setNestedValue<T>(obj: T, path: string, value: any): T {
+  const keys = path.split('.');
+  const clone = JSON.parse(JSON.stringify(obj));
+  let current: any = clone;
+  for (let i = 0; i < keys.length - 1; i++) {
+    current = current[keys[i]];
+  }
+  current[keys[keys.length - 1]] = value;
+  return clone;
+}
+
+const updateSetting = (path: string, value: boolean) => {
+    setSettings(prev => setNestedValue(prev, path, value));
+};
+
+const hasChanges = JSON.stringify(settings) !== JSON.stringify(originalSettings);
+
+const handleSaveSettings = async () => { 
+  setIsSaving(true);
+  try{
+    const response = await authenticatedFetch(`${config.apiBaseUrl}/account/update-settings`, {
+        method: 'POST',
+        headers: { 
+         'Content-Type': 'application/json'  // This tells backend to parse as JSON
+        },
+        body: JSON.stringify({
+          settings
+        })
+      });
+      if(!response.ok){
+        const errText = await response.text();
+        let errMsg = 'Failed to update settings. Please try again.';
+        try {
+          const result = JSON.parse(errText);
+          errMsg = result.message || errMsg;
+        } catch {
+          errMsg = errText || errMsg;
+        }
+        setSettingsError(errMsg);
+        return;
+      }
+      setOriginalSettings(JSON.parse(JSON.stringify(settings)));
+  }catch(err){
+    setSettingsError('Failed to save settings. Please try again.');
+  } finally {
+    setIsSaving(false);
+  }
+}
+
 
   // General States
   const [themeMode, setThemeMode] = useState<'light' | 'dark' | 'system'>(() => {
@@ -631,13 +688,13 @@ export const SettingsPage = () => {
                 </p>
               </div>
               <button 
-                onClick={() => setTwoStep(!twoStep)} 
+                onClick={() => updateSetting('accountSecurity.twoFactorAuth', !settings.accountSecurity.twoFactorAuth)} 
                 className={`w-12 h-6 rounded-full p-1 transition-colors duration-200 focus:outline-none shrink-0 ${
-                  twoStep ? 'bg-primary' : 'bg-surface-container-highest'
+                  settings.accountSecurity.twoFactorAuth ? 'bg-primary' : 'bg-surface-container-highest'
                 }`}
               >
                 <div className={`w-4 h-4 rounded-full bg-white transition-transform duration-200 ${
-                  twoStep ? 'translate-x-6' : 'translate-x-0'
+                  settings.accountSecurity.twoFactorAuth ? 'translate-x-6' : 'translate-x-0'
                 }`} />
               </button>
             </div>
@@ -651,13 +708,13 @@ export const SettingsPage = () => {
                 </p>
               </div>
               <button 
-                onClick={() => setSupportAccess(!supportAccess)} 
+                onClick={() => updateSetting('accountSecurity.supportAccess', !settings.accountSecurity.supportAccess)} 
                 className={`w-12 h-6 rounded-full p-1 transition-colors duration-200 focus:outline-none shrink-0 ${
-                  supportAccess ? 'bg-primary' : 'bg-surface-container-highest'
+                  settings.accountSecurity.supportAccess ? 'bg-primary' : 'bg-surface-container-highest'
                 }`}
               >
                 <div className={`w-4 h-4 rounded-full bg-white transition-transform duration-200 ${
-                  supportAccess ? 'translate-x-6' : 'translate-x-0'
+                  settings.accountSecurity.supportAccess  ? 'translate-x-6' : 'translate-x-0'
                 }`} />
               </button>
             </div>
@@ -708,13 +765,13 @@ export const SettingsPage = () => {
                     <p className="text-xs text-foreground/60">Receive news, campaign tips, and promotional offers.</p>
                   </div>
                   <button 
-                    onClick={() => setEmailPromo(!emailPromo)} 
+                    onClick={() => updateSetting('notifications.emailUpdates.promotionalUpdates', !settings.notifications.emailUpdates.promotionalUpdates)} 
                     className={`w-12 h-6 rounded-full p-1 transition-colors duration-200 focus:outline-none shrink-0 ${
-                      emailPromo ? 'bg-primary' : 'bg-surface-container-highest'
+                      settings.notifications.emailUpdates.promotionalUpdates ? 'bg-primary' : 'bg-surface-container-highest'
                     }`}
                   >
                     <div className={`w-4 h-4 rounded-full bg-white transition-transform duration-200 ${
-                      emailPromo ? 'translate-x-6' : 'translate-x-0'
+                      settings.notifications.emailUpdates.promotionalUpdates ? 'translate-x-6' : 'translate-x-0'
                     }`} />
                   </button>
                 </div>
@@ -725,13 +782,13 @@ export const SettingsPage = () => {
                     <p className="text-xs text-foreground/60">Get notified of new device logins, password changes, and OTPs.</p>
                   </div>
                   <button 
-                    onClick={() => setEmailSecurity(!emailSecurity)} 
+                    onClick={() => updateSetting('notifications.emailUpdates.securityAlerts', !settings.notifications.emailUpdates.securityAlerts)} 
                     className={`w-12 h-6 rounded-full p-1 transition-colors duration-200 focus:outline-none shrink-0 ${
-                      emailSecurity ? 'bg-primary' : 'bg-surface-container-highest'
+                      settings.notifications.emailUpdates.securityAlerts ? 'bg-primary' : 'bg-surface-container-highest'
                     }`}
                   >
                     <div className={`w-4 h-4 rounded-full bg-white transition-transform duration-200 ${
-                      emailSecurity ? 'translate-x-6' : 'translate-x-0'
+                      settings.notifications.emailUpdates.securityAlerts ? 'translate-x-6' : 'translate-x-0'
                     }`} />
                   </button>
                 </div>
@@ -742,16 +799,51 @@ export const SettingsPage = () => {
                     <p className="text-xs text-foreground/60">Receive critical notifications regarding billing and workspace shifts.</p>
                   </div>
                   <button 
-                    onClick={() => setEmailBilling(!emailBilling)} 
+                    onClick={() => updateSetting('notifications.emailUpdates.accountUpdates', !settings.notifications.emailUpdates.accountUpdates)} 
                     className={`w-12 h-6 rounded-full p-1 transition-colors duration-200 focus:outline-none shrink-0 ${
-                      emailBilling ? 'bg-primary' : 'bg-surface-container-highest'
+                      settings.notifications.emailUpdates.accountUpdates ? 'bg-primary' : 'bg-surface-container-highest'
                     }`}
                   >
                     <div className={`w-4 h-4 rounded-full bg-white transition-transform duration-200 ${
-                      emailBilling ? 'translate-x-6' : 'translate-x-0'
+                      settings.notifications.emailUpdates.accountUpdates ? 'translate-x-6' : 'translate-x-0'
                     }`} />
                   </button>
                 </div>
+
+                <div className="flex items-center justify-between py-2">
+                  <div>
+                    <h4 className="text-sm font-semibold text-foreground">Fundraiser Updates</h4>
+                    <p className="text-xs text-foreground/60">Get notified of new donations, updates, and progress for your fundraisers.</p>
+                  </div>
+                  <button 
+                    onClick={() => updateSetting('notifications.emailUpdates.fundraiserUpdates', !settings.notifications.emailUpdates.fundraiserUpdates)} 
+                    className={`w-12 h-6 rounded-full p-1 transition-colors duration-200 focus:outline-none shrink-0 ${
+                      settings.notifications.emailUpdates.fundraiserUpdates ? 'bg-primary' : 'bg-surface-container-highest'
+                    }`}
+                  >
+                    <div className={`w-4 h-4 rounded-full bg-white transition-transform duration-200 ${
+                      settings.notifications.emailUpdates.fundraiserUpdates ? 'translate-x-6' : 'translate-x-0'
+                    }`} />
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-between py-2">
+                  <div>
+                    <h4 className="text-sm font-semibold text-foreground">Cosigner Alerts</h4>
+                    <p className="text-xs text-foreground/60">Get push alerts for cosigner actions and updates.</p>
+                  </div>
+                  <button 
+                    onClick={() => updateSetting('notifications.emailUpdates.fundraiserCosignersNotification', !settings.notifications.emailUpdates.fundraiserCosignersNotification)} 
+                    className={`w-12 h-6 rounded-full p-1 transition-colors duration-200 focus:outline-none shrink-0 ${
+                      settings.notifications.emailUpdates.fundraiserCosignersNotification ? 'bg-primary' : 'bg-surface-container-highest'
+                    }`}
+                  >
+                    <div className={`w-4 h-4 rounded-full bg-white transition-transform duration-200 ${
+                      settings.notifications.emailUpdates.fundraiserCosignersNotification ? 'translate-x-6' : 'translate-x-0'
+                    }`} />
+                  </button>
+                </div>
+        
               </div>
             </div>
 
@@ -765,30 +857,47 @@ export const SettingsPage = () => {
                     <p className="text-xs text-foreground/60">Receive instant push messages for campaign requests or payout confirmations.</p>
                   </div>
                   <button 
-                    onClick={() => setMobileCampaign(!mobileCampaign)} 
+                    onClick={() => updateSetting('notifications.mobileUpdates.payOutsUpdates', !settings.notifications.mobileUpdates.payOutsUpdates)} 
                     className={`w-12 h-6 rounded-full p-1 transition-colors duration-200 focus:outline-none shrink-0 ${
-                      mobileCampaign ? 'bg-primary' : 'bg-surface-container-highest'
+                      settings.notifications.mobileUpdates.payOutsUpdates ? 'bg-primary' : 'bg-surface-container-highest'
                     }`}
                   >
                     <div className={`w-4 h-4 rounded-full bg-white transition-transform duration-200 ${
-                      mobileCampaign ? 'translate-x-6' : 'translate-x-0'
+                      settings.notifications.mobileUpdates.payOutsUpdates ? 'translate-x-6' : 'translate-x-0'
                     }`} />
                   </button>
                 </div>
 
                 <div className="flex items-center justify-between py-2">
                   <div>
-                    <h4 className="text-sm font-semibold text-foreground">Workspace Chat & Mentions</h4>
-                    <p className="text-xs text-foreground/60">Get push alerts when tagged by team members or in discussions.</p>
+                    <h4 className="text-sm font-semibold text-foreground">Fundraiser updates.</h4>
+                    <p className="text-xs text-foreground/60">Get push alerts for your fundraiser, this includes updates on donations and progress.</p>
                   </div>
                   <button 
-                    onClick={() => setMobileMentions(!mobileMentions)} 
+                    onClick={() => updateSetting('notifications.mobileUpdates.fundraiserUpdates', !settings.notifications.mobileUpdates.fundraiserUpdates)} 
                     className={`w-12 h-6 rounded-full p-1 transition-colors duration-200 focus:outline-none shrink-0 ${
-                      mobileMentions ? 'bg-primary' : 'bg-surface-container-highest'
+                      settings.notifications.mobileUpdates.fundraiserUpdates ? 'bg-primary' : 'bg-surface-container-highest'
                     }`}
                   >
                     <div className={`w-4 h-4 rounded-full bg-white transition-transform duration-200 ${
-                      mobileMentions ? 'translate-x-6' : 'translate-x-0'
+                      settings.notifications.mobileUpdates.fundraiserUpdates ? 'translate-x-6' : 'translate-x-0'
+                    }`} />
+                  </button>
+                </div>
+
+                 <div className="flex items-center justify-between py-2">
+                  <div>
+                    <h4 className="text-sm font-semibold text-foreground">Cosigners alerts.</h4>
+                    <p className="text-xs text-foreground/60">Get push alerts for cosigner actions and updates.</p>
+                  </div>
+                  <button 
+                    onClick={() => updateSetting('notifications.mobileUpdates.fundraiserCosignersNotification', !settings.notifications.mobileUpdates.fundraiserCosignersNotification)} 
+                    className={`w-12 h-6 rounded-full p-1 transition-colors duration-200 focus:outline-none shrink-0 ${
+                      settings.notifications.mobileUpdates.fundraiserCosignersNotification ? 'bg-primary' : 'bg-surface-container-highest'
+                    }`}
+                  >
+                    <div className={`w-4 h-4 rounded-full bg-white transition-transform duration-200 ${
+                      settings.notifications.mobileUpdates.fundraiserCosignersNotification ? 'translate-x-6' : 'translate-x-0'
                     }`} />
                   </button>
                 </div>
@@ -835,12 +944,36 @@ export const SettingsPage = () => {
               </div>
             </div>
 
-            {/* Save preferences notification button */}
-            <div className="flex justify-end pt-4">
-              <button className="bg-primary text-on-primary hover:bg-primary/95 text-xs font-bold uppercase tracking-widest px-6 py-3.5 rounded-xl transition-colors">
-                Save Preferences
-              </button>
-            </div>
+            {hasChanges && (
+  <div className="flex flex-col items-end pt-4 gap-2">
+     {settingsError && (
+      <p className="text-red-500 text-xs font-medium bg-red-50 px-3 py-1.5 rounded-lg">
+        {settingsError}
+      </p>
+    )}
+    <button
+      onClick={handleSaveSettings}
+      disabled={isSaving}
+      className={`text-xs font-bold uppercase tracking-widest px-6 py-3.5 rounded-xl transition-colors inline-flex items-center gap-2
+        ${isSaving 
+          ? 'bg-primary/70 text-on-primary cursor-wait' 
+          : 'bg-primary text-on-primary hover:bg-primary/95 cursor-pointer'
+        }`}
+    >
+      {isSaving ? (
+        <>
+          <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+          </svg>
+          Saving...
+        </>
+      ) : (
+        'Save Preferences'
+      )}
+    </button>
+  </div>
+)}
           </div>
         )}
 

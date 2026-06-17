@@ -1,5 +1,6 @@
 import React, { createContext, useState, useCallback, useEffect } from 'react';
 import type { ReactNode } from 'react';
+import { defaultSettings, type Settings } from '../types/settings';
 import config from '../lib/config';
 import { attemptRefresh, getAuthToken, resetRefreshFailureFlag } from '../lib/api';
 
@@ -13,7 +14,9 @@ export interface User {
   organisation?: string;
   profileImage?: string;
   profileImageUrl?: string;
+  settings:Settings;
 }
+
 
 export interface AuthContextType {
   accessToken: string | null;
@@ -202,6 +205,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             organisation: result.organisation,
             profileImage: result.profileImage || result.imageUrl,
             profileImageUrl: result.profileImageUrl || result.imageUrl || result.thumbnailUrl,
+            settings: result.settings || defaultSettings,
           };
 
           setUser(userData);
