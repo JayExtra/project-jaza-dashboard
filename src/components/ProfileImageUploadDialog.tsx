@@ -315,6 +315,7 @@ export const ProfileImageUploadDialog = ({
 
           xhr.open('POST', `${config.apiBaseUrl}/account/upload-picture`);
           if (accessToken) xhr.setRequestHeader('Authorization', `Bearer ${accessToken}`);
+          console.log('Uploading image with access token:', accessToken);
           xhr.send(formData);
         }, 'image/png');
       };

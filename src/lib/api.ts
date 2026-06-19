@@ -179,6 +179,7 @@ export const authenticatedFetch = async <T = any>(
   };
 
   if (currentAccessToken) {
+    console.log(`Attaching access token to request: ${currentAccessToken}`);
     headers['Authorization'] = `Bearer ${currentAccessToken}`;
   }
 
