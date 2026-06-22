@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Mail, RefreshCw, AlertCircle } from 'lucide-react';
-import config from '../lib/config';
-import { useAuth } from '../hooks/useAuth';
+import config from '../../../lib/config';
+import { useAuth } from '../../../hooks/useAuth';
 
 export const EmailVerificationOverlay = () => {
   const [isOpen, setIsOpen] = useState(false);

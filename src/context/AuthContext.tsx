@@ -23,13 +23,15 @@ export interface AuthContextType {
   user: User | null;
   isLoading: boolean;
   isAuthenticated: boolean;
+  showSignoutConfirmation: boolean;
   login: (email: string, password: string) => Promise<void>;
   signup: (userData: SignupData) => Promise<void>;
-  logout: () => Promise<void>;
+  logout: (allDevices: boolean) => Promise<void>;
   silentRefresh: () => Promise<boolean>;
   setUser: (user: User | null) => void;
   updateUser: (updates: Partial<User>) => void;
   setTokenAndUser: (token: string, userData: User) => void;
+  setSignoutConfirmationStatus: (status: boolean) => void;
 }
 
 export interface SignupData {
@@ -49,7 +51,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-
+  const [showSignoutConfirmation, setShowSignoutConfirmation] = useState(false);
   // Initialize from localStorage and attempt silent refresh
   useEffect(() => {
     const initializeAuth = async () => {
@@ -290,7 +292,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   /**
    * Logout: clear local state and call backend
    */
-  const logout = useCallback(async () => {
+  const logout = useCallback(async (allDevices : boolean) => {
     try {
       // Call logout endpoint - refresh token cookie is automatically sent
       await fetch(`${config.apiBaseUrl}/auth/logout`, {
@@ -299,7 +301,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           'Content-Type': 'application/json',
           ...(accessToken ? { 'Authorization': `Bearer ${accessToken}` } : {}),
         },
-        body: JSON.stringify({ allDevices: true }),
+        body: JSON.stringify({ allDevices: allDevices || false }),
         credentials: 'include', // Ensure cookies are sent
       }).catch((error) => {
         // Logout endpoint may fail, but we still clear local state
@@ -340,6 +342,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     localStorage.setItem('user', JSON.stringify(userData));
   }, []);
 
+  const setSignoutConfirmationStatus = useCallback((status: boolean) => {
+    setShowSignoutConfirmation(status);
+  }, []);
+
   const value: AuthContextType = {
     accessToken,
     user,
@@ -352,6 +358,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setUser,
     updateUser,
     setTokenAndUser,
+    showSignoutConfirmation,
+    setSignoutConfirmationStatus,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

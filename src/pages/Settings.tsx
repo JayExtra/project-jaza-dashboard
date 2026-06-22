@@ -5,13 +5,16 @@ import {
   Loader2, Eye, EyeOff, X
 } from 'lucide-react';
 import config from '../lib/config';
-import { ProfileImageUploadDialog } from '../components/ProfileImageUploadDialog';
+import { ProfileImageUploadDialog } from '../components/ui/dialogs/ProfileImageUploadDialog';
 import { useAuth } from '../hooks/useAuth';
 import { authenticatedFetch } from '../lib/api';
 import type { Settings } from '../types/settings';
 import { defaultSettings } from '../types/settings';
+import { DeleteAccountDialog } from '../components/ui/dialogs/DeleteDialog';
+import {useNavigate} from 'react-router-dom';
 
 export const SettingsPage = () => {
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = searchParams.get('tab') || 'account';
 
@@ -48,6 +51,9 @@ export const SettingsPage = () => {
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [isProfileDeleteDialogOpen, setIsProfileDeleteDialogOpen] = useState(false);
+  const [profileDeleteError, setProfileDeleteError] = useState<string | null>(null);
+
 
   const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
 
@@ -409,6 +415,50 @@ const handleSaveSettings = async () => {
   }
 }
 
+const handleShowDeleteDialog = () => { 
+  setIsProfileDeleteDialogOpen(true);
+}
+
+const handleDeleteAccount = async (deleteData: boolean) => {
+    try {
+      const response = await authenticatedFetch(`${config.apiBaseUrl}/account/delete`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json'
+        },    
+        body: JSON.stringify({    
+          deleteData:  deleteData
+        })
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        console.log('Delete account error response:', errText);
+        let errMsg = 'Failed to delete account. Please try again.';
+        setProfileDeleteError(errMsg);
+        try {
+          const result = JSON.parse(errText);
+          errMsg = result.message || errMsg;
+          console.log('Delete account error response:', errMsg);
+
+          setProfileDeleteError(errMsg);
+        } catch {
+          errMsg = errText || errMsg;
+          console.log('Delete account error response:', errMsg);
+          setProfileDeleteError(errMsg);
+        }
+        return;
+      }
+
+      // If deletion is successful, log the user out or redirect them
+      //replace with accountd deletion success dialog.
+      alert('Your account has been deleted successfully.');
+      navigate('/signin', { replace: true });
+    }catch(err) {
+       console.log('Delete account error response:', err);
+    }
+ }
+
 
   // General States
   const [themeMode, setThemeMode] = useState<'light' | 'dark' | 'system'>(() => {
@@ -442,15 +492,31 @@ const handleSaveSettings = async () => {
     }
   };
 
+  
+
+
   // Handle profile image upload
   const handleProfileImageUpload = (imageUrl: string) => {
     setProfileImageUrl(imageUrl);
     updateUser({ profileImageUrl: imageUrl, profileImage: imageUrl });
   };
 
+
   return (
     <div className="flex flex-col lg:flex-row min-h-screen bg-background text-foreground font-sans">
       
+      { isProfileDeleteDialogOpen && (
+        <DeleteAccountDialog 
+          userEmail={userEmail}
+          deleteError={profileDeleteError}
+          handleClose={() => setIsProfileDeleteDialogOpen(!isProfileDeleteDialogOpen)}
+          onDeleteAccount={ async (deleteData: boolean) => {
+            // Implementation for deleting account
+            handleDeleteAccount(deleteData);
+          }}
+        />
+      )}
+
       {/* Secondary Navigation Pane (Left Column) */}
       <div className="w-full lg:w-64 bg-surface-low border-r border-border/10 p-6 flex flex-col gap-6 shrink-0">
         <div>
@@ -721,7 +787,7 @@ const handleSaveSettings = async () => {
 
           
 
-            {/* Log out of all devices */}
+            {/* Log out of all devices
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 py-4">
               <div>
                 <h3 className="font-bold text-base mb-1">Log out of all devices</h3>
@@ -732,7 +798,7 @@ const handleSaveSettings = async () => {
               <button className="bg-surface-low hover:bg-surface-low/85 text-foreground border border-border/10 text-xs font-bold uppercase tracking-widest px-5 py-3 rounded-xl transition-colors shrink-0">
                 Log Out
               </button>
-            </div>
+            </div> */}
 
             {/* Delete Account (Destructive red block) */}
             <div className="bg-red-500/5 border border-red-500/10 rounded-2xl p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -742,7 +808,7 @@ const handleSaveSettings = async () => {
                   Permanently delete the account and remove access from all workspaces. This action is irreversible.
                 </p>
               </div>
-              <button className="bg-secondary hover:bg-secondary/95 text-white text-xs font-bold uppercase tracking-widest px-5 py-3 rounded-xl transition-colors shrink-0">
+              <button onClick={handleShowDeleteDialog} className="bg-secondary hover:bg-secondary/95 text-white text-xs font-bold uppercase tracking-widest px-5 py-3 rounded-xl transition-colors shrink-0">
                 Delete Account
               </button>
             </div>

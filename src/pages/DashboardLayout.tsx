@@ -3,8 +3,9 @@ import { Outlet, Navigate, useLocation } from 'react-router-dom';
 import { Sidebar } from '../components/layout/Sidebar';
 import { Topbar } from '../components/layout/Topbar';
 import { AIAgentPanel } from '../components/layout/AIAgentPanel';
-import { EmailVerificationOverlay } from '../components/EmailVerificationOverlay';
+import { EmailVerificationOverlay } from '../components/ui/dialogs/EmailVerificationOverlay';
 import { useAuth } from '../hooks/useAuth';
+import  { SignOutDialog } from '../components/ui/dialogs/SignOutDialog';
 
 export const DashboardLayout = () => {
   const [isDark, setIsDark] = useState(false);
@@ -12,6 +13,7 @@ export const DashboardLayout = () => {
   const [isAiOpen, setIsAiOpen] = useState(false);
   const location = useLocation();
   const { isAuthenticated, isLoading } = useAuth();
+  const { showSignoutConfirmation, setSignoutConfirmationStatus, logout } = useAuth();
 
   useEffect(() => {
     if (isDark) {
@@ -46,6 +48,24 @@ export const DashboardLayout = () => {
   return (
     <div className="flex bg-background min-h-screen text-foreground font-sans transition-colors duration-200 relative overflow-hidden">
       <EmailVerificationOverlay />
+
+      {
+showSignoutConfirmation && (
+        <SignOutDialog 
+          isOpen={showSignoutConfirmation}
+          handleClose={() => setSignoutConfirmationStatus(false)}
+          onSignOut={ async (signOutAllDevices : boolean) => {
+            try {
+              await logout(signOutAllDevices); // Log out from all devices
+            } catch (error) {
+              console.error('Error during logout:', error);
+            } finally {
+              setSignoutConfirmationStatus(false);
+            }
+          }}
+        />
+      )
+      }
       
       {/* Sidebar */}
       <Sidebar sidebarCollapsed={sidebarCollapsed} setIsAiOpen={setIsAiOpen} />

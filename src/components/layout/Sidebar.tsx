@@ -84,24 +84,19 @@ export const Sidebar = ({ sidebarCollapsed, setIsAiOpen }: SidebarProps) => {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-  const { logout, user } = useAuth();
+  const { showSignoutConfirmation ,setSignoutConfirmationStatus, user } = useAuth();
 
   const userName = user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'User Profile' : 'User Profile';
   const userEmail = user?.email || 'user@example.com';
+
 
   const isActive = (path: string) => {
     return location.pathname === path;
   };
 
   const handleSignOut = async () => {
-    try {
-      await logout();
-      navigate('/signin');
-    } catch (error) {
-      console.error('Error during logout:', error);
-      // Still navigate even if logout fails, as we cleared local state
-      navigate('/signin');
-    }
+    // Show or hide the sign-out confirmation dialog
+    setSignoutConfirmationStatus(!showSignoutConfirmation);
   };
 
   return (
