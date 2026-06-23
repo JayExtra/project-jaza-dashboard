@@ -38,6 +38,20 @@ export const SignIn = () => {
     // (indicated by a search param set by the backend redirect URL)
     const searchParams = new URLSearchParams(window.location.search);
     const isFromGoogleCallback = searchParams.has('from_oauth');
+    const error = searchParams.get('error');
+
+   
+if (error) {
+  console.error('Google OAuth error:', error);
+  if (error === 'account_disabled') {
+    setGlobalError('Your account is currently unavailable. Please contact support at support@jaza.com for assistance.');
+  } else {
+    setGlobalError('An error occurred during Google sign-in. Please try again.');
+  }
+  // Clean URL
+  window.history.replaceState({}, '', '/signin');
+  return;
+}
 
     if (!isFromGoogleCallback) {
       return;
@@ -95,7 +109,11 @@ export const SignIn = () => {
       navigate('/');
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Invalid email or password.';
-      setGlobalError(errorMessage);
+      if (errorMessage === 'ACCOUNT_DISABLED') {
+        setGlobalError('Your account is currently unavailable. Please contact support at support@jaza.com for assistance.');
+      } else {
+        setGlobalError(errorMessage);
+      }
     } finally {
       setIsLoading(false);
     }
