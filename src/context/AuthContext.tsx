@@ -14,7 +14,7 @@ export interface User {
   organisation?: string;
   profileImage?: string;
   profileImageUrl?: string;
-  settings:Settings;
+  settings: Settings;
 }
 
 
@@ -24,13 +24,19 @@ export interface AuthContextType {
   isLoading: boolean;
   isAuthenticated: boolean;
   showSignoutConfirmation: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<{
+    twoFactorRequired: boolean;
+    email?: string;
+    tempAccessToken?: string;
+    tempUser?: User;
+  } | void>;
   signup: (userData: SignupData) => Promise<void>;
   logout: (allDevices: boolean) => Promise<void>;
   silentRefresh: () => Promise<boolean>;
   setUser: (user: User | null) => void;
   updateUser: (updates: Partial<User>) => void;
   setTokenAndUser: (token: string, userData: User) => void;
+  completeTwoFactorLogin: (token: string, userData: User) => void;
   setSignoutConfirmationStatus: (status: boolean) => void;
 }
 
@@ -60,7 +66,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         // Check if we have user data in localStorage (e.g., from a previous session)
         const storedUserStr = localStorage.getItem('user');
         let storedUser: User | null = null;
-        
+
         if (storedUserStr) {
           try {
             storedUser = JSON.parse(storedUserStr);
@@ -73,8 +79,26 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
         // Attempt silent refresh to get a fresh access token
         const refreshed = await silentRefreshInternal();
-        
-        if (!refreshed) {
+
+        if (refreshed) {
+          // Check if user has 2FA enabled but didn't verify it in this tab session
+          const storedUserStr = localStorage.getItem('user');
+          if (storedUserStr) {
+            try {
+              const storedUser = JSON.parse(storedUserStr);
+              if (storedUser.settings?.accountSecurity?.twoFactorAuth && sessionStorage.getItem('2fa_verified') !== 'true') {
+                // Force logout as 2FA is required but not verified in this session
+                setAccessToken(null);
+                setUser(null);
+                localStorage.removeItem('user');
+                // Call logout to clear backend cookie
+                logout(false);
+              }
+            } catch (e) {
+              console.error('Failed to check 2FA on initialization', e);
+            }
+          }
+        } else {
           // No valid refresh token cookie, clear user
           // This will trigger a redirect to /signin via DashboardLayout guard
           setUser(null);
@@ -106,7 +130,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         // attemptRefresh has already updated currentAccessToken in api.ts
         // Now we need to update local auth state
         const token = getAuthToken();
-        
+
         if (token) {
           setAccessToken(token);
         }
@@ -190,13 +214,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         }
 
         const result = await response.json();
+        console.log("login result from AuthContext", result);
 
         if (result.accessToken) {
-          // Reset the refresh failure flag on successful login
-          resetRefreshFailureFlag();
-          
-          setAccessToken(result.accessToken);
-
           const userData: User = {
             userId: result.userId,
             email: result.email,
@@ -210,8 +230,26 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             settings: result.settings || defaultSettings,
           };
 
+          const is2FaEnabled = result.twoFAEnabled;
+
+          if (is2FaEnabled) {
+            // Do not complete login yet, return details for overlay
+            return {
+              twoFactorRequired: true,
+              email: result.email,
+              tempAccessToken: result.accessToken,
+              tempUser: userData,
+            };
+          }
+
+          // Reset the refresh failure flag on successful login
+          resetRefreshFailureFlag();
+
+          setAccessToken(result.accessToken);
           setUser(userData);
           localStorage.setItem('user', JSON.stringify(userData));
+          sessionStorage.setItem('2fa_verified', 'true');
+          return { twoFactorRequired: false };
         } else {
           throw new Error('No access token received');
         }
@@ -243,14 +281,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         if (!response.ok) {
           const contentType = response.headers.get('content-type');
           let errorMessage = 'Registration failed';
-          
+
           if (contentType?.includes('application/json')) {
             const result = await response.json();
             errorMessage = result.message || errorMessage;
           } else {
             errorMessage = await response.text() || errorMessage;
           }
-          
+
           throw new Error(errorMessage);
         }
 
@@ -292,7 +330,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   /**
    * Logout: clear local state and call backend
    */
-  const logout = useCallback(async (allDevices : boolean) => {
+  const logout = useCallback(async (allDevices: boolean) => {
     try {
       // Call logout endpoint - refresh token cookie is automatically sent
       await fetch(`${config.apiBaseUrl}/auth/logout`, {
@@ -314,6 +352,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setAccessToken(null);
       setUser(null);
       localStorage.removeItem('user');
+      sessionStorage.removeItem('2fa_verified');
     }
   }, [accessToken]);
 
@@ -336,10 +375,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const setTokenAndUser = useCallback((token: string, userData: User) => {
     // Reset the refresh failure flag on successful OAuth login
     resetRefreshFailureFlag();
-    
+
     setAccessToken(token);
     setUser(userData);
     localStorage.setItem('user', JSON.stringify(userData));
+  }, []);
+
+  const completeTwoFactorLogin = useCallback((token: string, userData: User) => {
+    resetRefreshFailureFlag();
+    setAccessToken(token);
+    setUser(userData);
+    localStorage.setItem('user', JSON.stringify(userData));
+    sessionStorage.setItem('2fa_verified', 'true');
   }, []);
 
   const setSignoutConfirmationStatus = useCallback((status: boolean) => {
@@ -358,6 +405,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setUser,
     updateUser,
     setTokenAndUser,
+    completeTwoFactorLogin,
     showSignoutConfirmation,
     setSignoutConfirmationStatus,
   };
