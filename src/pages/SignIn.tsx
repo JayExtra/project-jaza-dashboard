@@ -51,6 +51,8 @@ export const SignIn = () => {
       console.error('Google OAuth error:', error);
       if (error === 'account_disabled') {
         setGlobalError('Your account is currently unavailable. Please contact support at support@jaza.com for assistance.');
+      } else if (error === 'account_exists') {
+        setGlobalError('An account with this email address already exists. Please sign in with your password.');
       } else {
         setGlobalError('An error occurred during Google sign-in. Please try again.');
       }

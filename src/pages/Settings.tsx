@@ -27,6 +27,8 @@ export const SettingsPage = () => {
 
   // Profile image state
   const [profileImageUrl, setProfileImageUrl] = useState<string | null>(null);
+  const [loadedUrl, setLoadedUrl] = useState<string | null>(null);
+  const isImageLoading = !!profileImageUrl && profileImageUrl !== loadedUrl;
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
 
   // Profile update loading/status states
@@ -503,6 +505,7 @@ export const SettingsPage = () => {
 
 
   return (
+
     <div className="flex flex-col lg:flex-row min-h-screen bg-background text-foreground font-sans">
 
       {isProfileDeleteDialogOpen && (
@@ -597,12 +600,29 @@ export const SettingsPage = () => {
               <div className="flex flex-col sm:flex-row items-center gap-6 p-6 bg-surface-low/30 rounded-2xl">
                 {/* Circular Profile Avatar */}
                 <div className="relative group shrink-0">
-                  <div className="w-24 h-24 rounded-full overflow-hidden border-2 border-primary bg-surface-low shadow-sm flex items-center justify-center">
-                    <img
-                      src={profileImageUrl || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=200&h=200"}
-                      alt="Profile Avatar"
-                      className="w-full h-full object-cover object-center"
-                    />
+                  <div className="relative w-24 h-24 rounded-full overflow-hidden border-2 border-primary bg-surface-low shadow-sm flex items-center justify-center">
+                    {profileImageUrl ? (
+                      <>
+                        {isImageLoading && (
+                          <div className="absolute inset-0 bg-surface-low flex items-center justify-center z-10">
+                            <Loader2 size={24} className="text-primary animate-spin" />
+                          </div>
+                        )}
+                        <img
+                          src={profileImageUrl}
+                          alt="Profile Avatar"
+                          onLoad={() => setLoadedUrl(profileImageUrl)}
+                          onError={() => setLoadedUrl(profileImageUrl)}
+                          className={`w-full h-full object-cover object-center transition-opacity duration-200 ${
+                            isImageLoading ? 'opacity-0' : 'opacity-100'
+                          }`}
+                        />
+                      </>
+                    ) : (
+                      <div className="w-full h-full bg-surface-low flex items-center justify-center text-foreground/40">
+                        <User size={36} className="stroke-[1.5]" />
+                      </div>
+                    )}
                   </div>
                   <div className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
                     <Camera size={18} className="text-white" />

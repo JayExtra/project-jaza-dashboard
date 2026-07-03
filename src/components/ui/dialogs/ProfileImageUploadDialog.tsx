@@ -291,6 +291,7 @@ export const ProfileImageUploadDialog = ({
               try {
                 const response = JSON.parse(xhr.responseText) as UploadResponse;
                 setSuccess(true);
+                setIsUploading(false);
                 onImageUpload(response.imageUrl);
                 setTimeout(() => handleClose(), 2000);
               } catch {
@@ -331,6 +332,7 @@ export const ProfileImageUploadDialog = ({
     setPreview(null);
     setError(null);
     setSuccess(false);
+    setIsUploading(false);
     setUploadProgress(0);
     setPan({ x: 0, y: 0 });
     setIsDragging(false);
