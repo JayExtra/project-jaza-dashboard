@@ -8,6 +8,7 @@ import config from '../lib/config';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { TwoFactorOverlay } from '../components/auth/TwoFactorOverlay';
+import { defaultSettings } from '../types/settings';
 
 const signInSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
@@ -26,26 +27,14 @@ export const SignIn = () => {
   const [isTwoFactorLoading, setIsTwoFactorLoading] = useState(false);
   const [tempAuth, setTempAuth] = useState<{ token: string; user: any } | null>(null);
   const navigate = useNavigate();
-  const authChecked = useRef(false);
+  const googleCallbackCalled = useRef(false);
   const { isAuthenticated, login, setTokenAndUser, completeTwoFactorLogin } = useAuth();
 
-  // Check if already authenticated (AuthContext handles silent refresh)
+  // Check if we're coming back from Google OAuth callback
   useEffect(() => {
-    if (authChecked.current) return;
-    authChecked.current = true;
-
-    // If AuthContext already authenticated us via silent refresh, redirect
-    if (isAuthenticated) {
-      navigate('/', { replace: true });
-      return;
-    }
-
-    // ONLY check for Google OAuth callback if we're being redirected back from Google
-    // (indicated by a search param set by the backend redirect URL)
     const searchParams = new URLSearchParams(window.location.search);
     const isFromGoogleCallback = searchParams.has('from_oauth');
     const error = searchParams.get('error');
-
 
     if (error) {
       console.error('Google OAuth error:', error);
@@ -61,44 +50,105 @@ export const SignIn = () => {
       return;
     }
 
-    if (!isFromGoogleCallback) {
-      return;
-    }
+    if (isFromGoogleCallback && !googleCallbackCalled.current) {
+      googleCallbackCalled.current = true;
 
-    // Check if we're coming back from Google OAuth callback
-    const handleGoogleCallback = async () => {
-      try {
-        const response = await fetch(`${config.apiBaseUrl}/public/profile/me`, {
-          credentials: 'include', // Important: sends the Google session cookie
-        });
+      const handleGoogleCallback = async () => {
+        try {
+          const response = await fetch(`${config.apiBaseUrl}/public/profile/me`, {
+            credentials: 'include', // Important: sends the Google session cookie
+          });
 
-        if (response.ok) {
-          const data = await response.json();
+          if (response.ok) {
+            const data = await response.json();
 
-          // Handover: Backend returns JWT tokens and sets refresh token cookie
-          if (data.accessToken) {
-            // Set both access token and user data
-            setTokenAndUser(data.accessToken, {
-              userId: data.userId,
-              email: data.email,
-              firstName: data.firstName,
-              lastName: data.lastName,
-              emailVerified: data.emailVerified,
-              role: data.role,
-              organisation: data.organisation,
-            });
+            // Handover: Backend returns JWT tokens and sets refresh token cookie
+            if (data.accessToken) {
+              const userSettings = data.settings || defaultSettings;
+              const updatedSettings = {
+                ...userSettings,
+                accountSecurity: {
+                  ...(userSettings.accountSecurity || {}),
+                  twoFactorAuth: data.twoFactorEnabled ? true : (userSettings.accountSecurity?.twoFactorAuth ?? false),
+                }
+              };
 
-            navigate('/', { replace: true });
+              const userData = {
+                userId: data.userId,
+                email: data.email,
+                firstName: data.firstName,
+                lastName: data.lastName,
+                emailVerified: data.emailVerified,
+                role: data.role,
+                organisation: data.organisation,
+                profileImage: data.profileImage || data.imageUrl,
+                profileImageUrl: data.profileImageUrl || data.imageUrl || data.thumbnailUrl,
+                settings: updatedSettings
+              };
+
+              if (data.twoFactorEnabled) {
+                setTwoFactorEmail(data.email);
+                setTempAuth({
+                  token: data.accessToken,
+                  user: userData,
+                });
+
+                // Trigger OTP generation via /auth/2fa/otp
+                try {
+                  const requestOtpResponse = await fetch(`${config.apiBaseUrl}/auth/2fa/otp`, {
+                    method: 'GET',
+                    headers: {
+                      'Authorization': `Bearer ${data.accessToken}`,
+                      'Content-Type': 'application/json',
+                    }
+                  });
+
+                  if (!requestOtpResponse.ok) {
+                    const errorText = await requestOtpResponse.text();
+                    let errorMessage = 'Failed to generate security code. Please try again.';
+                    try {
+                      const result = JSON.parse(errorText);
+                      errorMessage = result.message || errorMessage;
+                    } catch (e) {
+                      errorMessage = errorText || errorMessage;
+                    }
+                    throw new Error(errorMessage);
+                  }
+                } catch (otpErr) {
+                  const msg = otpErr instanceof Error ? otpErr.message : 'Failed to request code';
+                  setGlobalError(msg);
+                  window.history.replaceState({}, '', '/signin');
+                  return;
+                }
+
+                setShowTwoFactor(true);
+                window.history.replaceState({}, '', '/signin');
+                return;
+              }
+
+              // Set both access token and user data
+              setTokenAndUser(data.accessToken, userData);
+              navigate('/', { replace: true });
+            }
           }
+        } catch (err) {
+          console.error('Google callback check error:', err);
         }
-        // If /me endpoint returns no token, user is not coming from Google OAuth - stay on login page
-      } catch (err) {
-        console.error('Google callback check error:', err);
-      }
-    };
+      };
 
-    handleGoogleCallback();
-  }, [isAuthenticated, navigate]);
+      handleGoogleCallback();
+    }
+  }, [navigate, setTokenAndUser]);
+
+  // Redirect if authenticated (unless in Google OAuth callback or 2FA flow)
+  useEffect(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    const isFromGoogleCallback = searchParams.has('from_oauth');
+
+    if (isAuthenticated && !isFromGoogleCallback && !showTwoFactor && !tempAuth) {
+      navigate('/', { replace: true });
+    }
+  }, [isAuthenticated, showTwoFactor, tempAuth, navigate]);
 
   const {
     register,
