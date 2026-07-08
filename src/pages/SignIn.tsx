@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, ArrowRight, Loader2, TrendingUp } from 'lucide-react';
 import { z } from 'zod';
@@ -6,14 +6,15 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import config from '../lib/config';
 import { Link } from 'react-router-dom';
-
+import { useAuth } from '../hooks/useAuth';
+import { fetchIpAndLocation } from '../context/AuthContext';
+import { TwoFactorOverlay } from '../components/auth/TwoFactorOverlay';
+import { defaultSettings } from '../types/settings';
 
 const signInSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
   password: z.string().min(6, 'Password must be at least 6 characters long'),
 });
-
-const apiBaseUrl = config.apiBaseUrl;
 
 type SignInValues = z.infer<typeof signInSchema>;
 
@@ -21,58 +22,142 @@ export const SignIn = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [globalError, setGlobalError] = useState<string | null>(null);
+  const [showTwoFactor, setShowTwoFactor] = useState(false);
+  const [twoFactorEmail, setTwoFactorEmail] = useState('');
+  const [twoFactorError, setTwoFactorError] = useState<string | null>(null);
+  const [isTwoFactorLoading, setIsTwoFactorLoading] = useState(false);
+  const [tempAuth, setTempAuth] = useState<{ token: string; user: any } | null>(null);
   const navigate = useNavigate();
-  const authChecked = useRef(false);
+  const googleCallbackCalled = useRef(false);
+  const { isAuthenticated, login, setTokenAndUser, completeTwoFactorLogin } = useAuth();
 
+  // Check if we're coming back from Google OAuth callback
   useEffect(() => {
-    if (authChecked.current) return;
+    const searchParams = new URLSearchParams(window.location.search);
+    const isFromGoogleCallback = searchParams.has('from_oauth');
+    const error = searchParams.get('error');
 
-    const handleGoogleAuth = async () => {
-      // 1. Check if we already have a session in LocalStorage to prevent unnecessary calls
-      if (localStorage.getItem('accessToken')) {
-        navigate('/');
-        return;
+    if (error) {
+      console.error('Google OAuth error:', error);
+      if (error === 'account_disabled') {
+        setGlobalError('Your account is currently unavailable. Please contact support at support@jaza.com for assistance.');
+      } else if (error === 'account_exists') {
+        setGlobalError('An account with this email address already exists. Please sign in with your password.');
+      } else {
+        setGlobalError('An error occurred during Google sign-in. Please try again.');
       }
+      // Clean URL
+      window.history.replaceState({}, '', '/signin');
+      return;
+    }
 
-      try {
-        setIsLoading(true);
-        // 2. Call /me with 'include' to send the Google Session Cookie
-        const response = await fetch(`${apiBaseUrl}/public/profile/me`, {
-          credentials: 'include',
-        });
+    if (isFromGoogleCallback && !googleCallbackCalled.current) {
+      googleCallbackCalled.current = true;
 
-        if (response.ok) {
-          const data = await response.json();
-
-          // 3. SECURE THE TOKENS (The "Handover")
-          if (data.accessToken) {
-            localStorage.setItem('accessToken', data.accessToken);
-            localStorage.setItem('refreshToken', data.refreshToken);
-            localStorage.setItem('user', JSON.stringify({
-              userId: data.userId,
-              email: data.email,
-              firstName: data.firstName,
-              lastName: data.lastName,
-              emailVerified: data.emailVerified,
-            }));
-
-            authChecked.current = true;
-            // 4. Redirect to dashboard - Loop stopped!
-            navigate('/', { replace: true });
+      const handleGoogleCallback = async () => {
+        try {
+          let locationStr = 'Unknown City, Unknown Country';
+          try {
+            const { city, country } = await fetchIpAndLocation();
+            locationStr = `${city}, ${country}`;
+          } catch (err) {
+            console.warn('Failed to fetch location for Google callback:', err);
           }
-        } else {
-          const data = await response.json();
-          console.log("No cookie session found, user needs to log in manually. Data: ", data);
-        }
-      } catch (err) {
-        console.error('Session check error:', err);
-      } finally {
-        setIsLoading(false);
-      }
-    };
 
-    handleGoogleAuth();
-  }, [navigate]);
+          const response = await fetch(`${config.apiBaseUrl}/public/profile/me?locationData=${encodeURIComponent(locationStr)}`, {
+            credentials: 'include', // Important: sends the Google session cookie
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+
+            // Handover: Backend returns JWT tokens and sets refresh token cookie
+            if (data.accessToken) {
+              const userSettings = data.settings || defaultSettings;
+              const updatedSettings = {
+                ...userSettings,
+                accountSecurity: {
+                  ...(userSettings.accountSecurity || {}),
+                  twoFactorAuth: data.twoFactorEnabled ? true : (userSettings.accountSecurity?.twoFactorAuth ?? false),
+                }
+              };
+
+              const userData = {
+                userId: data.userId,
+                email: data.email,
+                firstName: data.firstName,
+                lastName: data.lastName,
+                emailVerified: data.emailVerified,
+                role: data.role,
+                organisation: data.organisation,
+                profileImage: data.profileImage || data.imageUrl,
+                profileImageUrl: data.profileImageUrl || data.imageUrl || data.thumbnailUrl,
+                settings: updatedSettings
+              };
+
+              if (data.twoFactorEnabled) {
+                setTwoFactorEmail(data.email);
+                setTempAuth({
+                  token: data.accessToken,
+                  user: userData,
+                });
+
+                // Trigger OTP generation via /auth/2fa/otp
+                try {
+                  const requestOtpResponse = await fetch(`${config.apiBaseUrl}/auth/2fa/otp`, {
+                    method: 'GET',
+                    headers: {
+                      'Authorization': `Bearer ${data.accessToken}`,
+                      'Content-Type': 'application/json',
+                    }
+                  });
+
+                  if (!requestOtpResponse.ok) {
+                    const errorText = await requestOtpResponse.text();
+                    let errorMessage = 'Failed to generate security code. Please try again.';
+                    try {
+                      const result = JSON.parse(errorText);
+                      errorMessage = result.message || errorMessage;
+                    } catch (e) {
+                      errorMessage = errorText || errorMessage;
+                    }
+                    throw new Error(errorMessage);
+                  }
+                } catch (otpErr) {
+                  const msg = otpErr instanceof Error ? otpErr.message : 'Failed to request code';
+                  setGlobalError(msg);
+                  window.history.replaceState({}, '', '/signin');
+                  return;
+                }
+
+                setShowTwoFactor(true);
+                window.history.replaceState({}, '', '/signin');
+                return;
+              }
+
+              // Set both access token and user data
+              setTokenAndUser(data.accessToken, userData);
+              navigate('/', { replace: true });
+            }
+          }
+        } catch (err) {
+          console.error('Google callback check error:', err);
+        }
+      };
+
+      handleGoogleCallback();
+    }
+  }, [navigate, setTokenAndUser]);
+
+  // Redirect if authenticated (unless in Google OAuth callback or 2FA flow)
+  useEffect(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    const isFromGoogleCallback = searchParams.has('from_oauth');
+
+    if (isAuthenticated && !isFromGoogleCallback && !showTwoFactor && !tempAuth) {
+      navigate('/', { replace: true });
+    }
+  }, [isAuthenticated, showTwoFactor, tempAuth, navigate]);
 
   const {
     register,
@@ -87,53 +172,102 @@ export const SignIn = () => {
     setGlobalError(null);
 
     try {
-      const response = await fetch(`${apiBaseUrl}/auth/login`, {
+      const res = await login(data.email, data.password);
+      console.log("login res", res);
+      if (res && res.twoFactorRequired) {
+        console.log("two factor required ", res);
+        setTwoFactorEmail(res.email || data.email);
+        setTempAuth({
+          token: res.tempAccessToken!,
+          user: res.tempUser!,
+        });
+
+        // Trigger OTP generation via /auth/request-otp
+        try {
+          const requestOtpResponse = await fetch(`${config.apiBaseUrl}/auth/2fa/otp`, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${res.tempAccessToken}`,
+              'Content-Type': 'application/json',
+            }
+          });
+
+          if (!requestOtpResponse.ok) {
+            const errorText = await requestOtpResponse.text();
+            let errorMessage = 'Failed to generate security code. Please try again.';
+            try {
+              const result = JSON.parse(errorText);
+              errorMessage = result.message || errorMessage;
+            } catch (e) {
+              errorMessage = errorText || errorMessage;
+            }
+            throw new Error(errorMessage);
+          }
+        } catch (otpErr) {
+          const msg = otpErr instanceof Error ? otpErr.message : 'Failed to request code';
+          setGlobalError(msg);
+          setIsLoading(false);
+          return;
+        }
+
+        setShowTwoFactor(true);
+      } else {
+        navigate('/');
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Invalid email or password.';
+      if (errorMessage === 'ACCOUNT_DISABLED') {
+        setGlobalError('Your account is currently unavailable. Please contact support at support@jaza.com for assistance.');
+      } else {
+        setGlobalError(errorMessage);
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleVerify2FA = async (otp: string) => {
+    setIsTwoFactorLoading(true);
+    setTwoFactorError(null);
+
+    try {
+      // Call verify-otp endpoint
+      const response = await fetch(`${config.apiBaseUrl}/auth/2fa/verify-otp`, {
         method: 'POST',
         headers: {
+          'Authorization': `Bearer ${tempAuth?.token}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          email: data.email,
-          password: data.password,
+          email: twoFactorEmail,
+          otp: otp,
         }),
       });
 
-      const result = await response.json();
-
       if (!response.ok) {
-        // Handle error response
-        const errorMessage = result.message || 'Invalid email or password.';
-        setGlobalError(errorMessage);
+        const errorText = await response.text();
+        let errorMessage = 'Invalid security code. Please try again.';
+        try {
+          const result = JSON.parse(errorText);
+          errorMessage = result.message || errorMessage;
+        } catch (e) {
+          errorMessage = errorText || errorMessage;
+        }
+        setTwoFactorError(errorMessage);
         return;
       }
 
-      console.log(`SUCCESS LOGIN: user data, ID : ${result.userId} , email: ${result.email}, emailVerified: ${result.emailVerified} ,  accessToken: ${result.accessToken}`);
-
-      // Success - store tokens and user info
-      localStorage.setItem('accessToken', result.accessToken);
-      localStorage.setItem('refreshToken', result.refreshToken);
-      localStorage.setItem('user', JSON.stringify({
-        userId: result.userId,
-        email: result.email,
-        firstName: result.firstName,
-        lastName: result.lastName,
-        role: result.role,
-        emailVerified: result.emailVerified,
-        organisation: result.organisation,
-      }));
-
-      // Optional: store expiry time for easy checking later
-      const expiryTime = Date.now() + (result.accessExpiresIn * 1000);
-      localStorage.setItem('tokenExpiry', expiryTime.toString());
-
-      // Navigate to dashboard
-      navigate('/');
-
+      // OTP is valid!
+      if (tempAuth) {
+        completeTwoFactorLogin(tempAuth.token, tempAuth.user);
+        navigate('/', { replace: true });
+      } else {
+        setTwoFactorError('Session expired. Please try signing in again.');
+      }
     } catch (err) {
-      console.error('Login error:', err);
-      setGlobalError('An unexpected error occurred. Please try again later.');
+      setTwoFactorError('An unexpected error occurred. Please try again later.');
     } finally {
-      setIsLoading(false);
+      setIsTwoFactorLoading(false);
     }
   };
 
@@ -249,9 +383,9 @@ export const SignIn = () => {
 
           <p className="text-center mt-12 text-sm text-foreground/60">
             Don't have a kitty yet?{' '}
-            <a href={`${config.landingUrl}/signup`} className="font-bold text-foreground hover:text-primary transition-colors">
+            <Link to="/signup" className="font-bold text-foreground hover:text-primary transition-colors">
               Join Now
-            </a>
+            </Link>
           </p>
         </div>
 
@@ -288,8 +422,8 @@ export const SignIn = () => {
 
         {/* Top-right floating logo/brand name */}
         <div className="flex items-center pl-4 border-l border-border">
-        
-        
+
+
         </div>
 
         {/* Central Card */}
@@ -316,6 +450,21 @@ export const SignIn = () => {
         {/* Bottom Orange/Secondary Glow */}
         <div className="absolute -bottom-1/4 -left-1/4 w-[800px] h-[800px] bg-secondary/20 rounded-full blur-[120px] pointer-events-none mix-blend-screen"></div>
       </div>
+      {showTwoFactor && (
+        <TwoFactorOverlay
+          email={twoFactorEmail}
+          accessToken={tempAuth?.token || ''}
+          onVerify={handleVerify2FA}
+          onCancel={() => {
+            setShowTwoFactor(false);
+            setTempAuth(null);
+            setTwoFactorError(null);
+          }}
+          isLoading={isTwoFactorLoading}
+          error={twoFactorError}
+          setError={setTwoFactorError}
+        />
+      )}
     </div>
   );
 };

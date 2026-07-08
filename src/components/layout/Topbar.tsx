@@ -1,8 +1,8 @@
-import { Moon, Sun, Bell, AlignLeft } from 'lucide-react';
+import { Moon, Sun, Bell, AlignLeft, Sparkles } from 'lucide-react';
 import { SearchBar } from '../ui/SearchBar';
 import { Link } from 'react-router-dom';
 
-export const Topbar = ({ sidebarCollapsed, setSidebarCollapsed, isDark, setIsDark }) => {
+export const Topbar = ({ sidebarCollapsed, setSidebarCollapsed, isDark, setIsDark, isAiOpen, setIsAiOpen }) => {
   return (
     <header className="h-20 px-8 flex items-center justify-between border-b border-border bg-surface">
       <div className="flex items-center gap-4 flex-1">
@@ -17,6 +17,14 @@ export const Topbar = ({ sidebarCollapsed, setSidebarCollapsed, isDark, setIsDar
       </div>
 
       <div className="flex items-center gap-4">
+        <button
+          onClick={() => setIsAiOpen(!isAiOpen)}
+          aria-label="Toggle AI Assistant"
+          className={`p-2 rounded-lg transition-all ${isAiOpen ? 'bg-primary/10 text-primary scale-110' : 'text-foreground/60 hover:text-foreground hover:bg-surface-low'}`}
+        >
+          <Sparkles size={20} className={isAiOpen ? 'animate-pulse' : ''} />
+        </button>
+
         <button
           onClick={() => setIsDark(!isDark)}
           aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
