@@ -7,6 +7,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import config from '../lib/config';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import { fetchIpAndLocation } from '../context/AuthContext';
 import { TwoFactorOverlay } from '../components/auth/TwoFactorOverlay';
 import { defaultSettings } from '../types/settings';
 
@@ -55,7 +56,15 @@ export const SignIn = () => {
 
       const handleGoogleCallback = async () => {
         try {
-          const response = await fetch(`${config.apiBaseUrl}/public/profile/me`, {
+          let locationStr = 'Unknown City, Unknown Country';
+          try {
+            const { city, country } = await fetchIpAndLocation();
+            locationStr = `${city}, ${country}`;
+          } catch (err) {
+            console.warn('Failed to fetch location for Google callback:', err);
+          }
+
+          const response = await fetch(`${config.apiBaseUrl}/public/profile/me?locationData=${encodeURIComponent(locationStr)}`, {
             credentials: 'include', // Important: sends the Google session cookie
           });
 

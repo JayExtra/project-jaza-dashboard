@@ -49,6 +49,109 @@ export interface SignupData {
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const getBrowserInfo = (): string => {
+  const ua = navigator.userAgent;
+  let tem;
+  let M = ua.match(/(opera|chrome|safari|firefox|msie|trident(?=\/))\/?\s*(\d+)/i) || [];
+
+  if (/trident/i.test(M[1])) {
+    tem = /\brv[ :]+(\d+)/g.exec(ua) || [];
+    return `IE ${tem[1] || ''}`;
+  }
+
+  if (M[1] === 'Chrome') {
+    tem = ua.match(/\b(OPR|Edge)\/(\d+)/);
+    if (tem != null) {
+      return tem.slice(1).join(' ').replace('OPR', 'Opera');
+    }
+  }
+
+  M = M[2] ? [M[1], M[2]] : [navigator.appName, navigator.appVersion, '-?'];
+  if ((tem = ua.match(/version\/(\d+)/i)) != null) {
+    M.splice(1, 1, tem[1]);
+  }
+
+  let os = 'Unknown OS';
+  if (ua.indexOf('Win') !== -1) os = 'Windows';
+  if (ua.indexOf('Mac') !== -1) os = 'MacOS';
+  if (ua.indexOf('X11') !== -1) os = 'UNIX';
+  if (ua.indexOf('Linux') !== -1) os = 'Linux';
+
+  return `${M.join(' ')} (${os})`;
+};
+
+export const fetchIpAndLocation = async (): Promise<{ ip: string; city: string; country: string }> => {
+  let ipv4 = 'Unknown IP';
+
+  // Step 1: Get IPv4 address strictly
+  try {
+    const res = await fetch('https://api4.ipify.org?format=json');
+    if (res.ok) {
+      const data = await res.json();
+      if (data.ip) ipv4 = data.ip;
+    }
+  } catch (err) {
+    console.warn('Failed to fetch IPv4 from api4.ipify.org, trying api.ipify.org...', err);
+    try {
+      const res = await fetch('https://api.ipify.org?format=json');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.ip) ipv4 = data.ip;
+      }
+    } catch (err2) {
+      console.warn('Failed to fetch IP from api.ipify.org', err2);
+    }
+  }
+
+  // Step 2: Fetch location based on the resolved IP (or fallback to self-lookup if IP is unknown)
+  if (ipv4 !== 'Unknown IP') {
+    try {
+      const res = await fetch(`https://ipapi.co/${ipv4}/json/`);
+      if (res.ok) {
+        const data = await res.json();
+        return {
+          ip: ipv4,
+          city: data.city || 'Unknown City',
+          country: data.country_name || 'Unknown Country',
+        };
+      }
+    } catch (err) {
+      console.warn('Failed to fetch location from ipapi.co for IP:', ipv4, err);
+    }
+
+    try {
+      const res = await fetch(`https://ipinfo.io/${ipv4}/json`);
+      if (res.ok) {
+        const data = await res.json();
+        return {
+          ip: ipv4,
+          city: data.city || 'Unknown City',
+          country: data.country || 'Unknown Country',
+        };
+      }
+    } catch (err) {
+      console.warn('Failed to fetch location from ipinfo.io for IP:', ipv4, err);
+    }
+  } else {
+    // If we couldn't resolve the IP address in Step 1, try direct geo-IP lookup
+    try {
+      const res = await fetch('https://ipapi.co/json/');
+      if (res.ok) {
+        const data = await res.json();
+        return {
+          ip: data.ip || 'Unknown IP',
+          city: data.city || 'Unknown City',
+          country: data.country_name || 'Unknown Country',
+        };
+      }
+    } catch (err) {
+      console.warn('Failed to fetch direct location from ipapi.co', err);
+    }
+  }
+
+  return { ip: ipv4, city: 'Unknown City', country: 'Unknown Country' };
+};
+
 interface AuthProviderProps {
   children: ReactNode;
 }
@@ -199,12 +302,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const login = useCallback(
     async (email: string, password: string) => {
       try {
+        const { ip, city, country } = await fetchIpAndLocation();
+        const browser = getBrowserInfo();
+        const deviceInfo = `IP: ${ip}, Browser: ${browser}, Location: ${city}, ${country}`;
+
         const response = await fetch(`${config.apiBaseUrl}/auth/login`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ email, password }),
+          body: JSON.stringify({ email, password, deviceInfo }),
           credentials: 'include', // Important: receives the refresh token cookie
         });
 
