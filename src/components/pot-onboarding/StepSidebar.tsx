@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import type { StepContent } from '../../types/pot';
 
 interface StepSidebarProps {
@@ -8,9 +9,19 @@ interface StepSidebarProps {
 export const StepSidebar = ({ step, content }: StepSidebarProps) => {
   return (
     <div className="flex-none w-80 bg-surface-low px-11 py-12 flex flex-col">
-      <svg width="32" height="24" viewBox="0 0 32 24" fill="none" className="text-foreground">
-        <path d="M4 22a12 12 0 0 1 24 0" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
-      </svg>
+       <div className="flex items-center ">
+                    <Link 
+                        to="/"
+                        aria-label="Go to home"
+                        className="hover:opacity-80 transition-opacity"
+                    >
+                       <img 
+                    src="/logo.png" 
+                    alt="Jaza" 
+                    className="h-16 w-auto object-contain"
+                     /> 
+                    </Link>
+            </div>
 
       <div className="flex-1 min-h-8" />
 

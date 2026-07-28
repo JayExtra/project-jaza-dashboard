@@ -64,6 +64,7 @@ export const PotOnboarding = () => {
   const canContinue = requiredOk[step];
 
   const goBack = () => setStep((s) => Math.max(1, s - 1));
+  const goHome = () => navigate('/');
   const goNext = () => setStep((s) => Math.min(TOTAL_STEPS, s + 1));
   const jumpTo = (n: number) => setStep(n);
 
@@ -142,8 +143,14 @@ export const PotOnboarding = () => {
 
         <div className="flex justify-between items-center px-16 pb-10">
           <button
-            onClick={goBack}
-            className={`${step === 1 ? 'invisible' : 'visible'} bg-transparent text-foreground font-display text-sm font-semibold ring-1 ring-inset ring-foreground/15 rounded-xl px-7 py-3.5`}
+            onClick={() => {
+              if (step === 1) {
+                goHome();
+              } else {
+                goBack();
+              }
+            }}
+            className={`bg-transparent text-foreground font-display text-sm font-semibold ring-1 ring-inset ring-foreground/15 rounded-xl px-7 py-3.5`}
           >
             Back
           </button>
