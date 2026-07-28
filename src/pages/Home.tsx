@@ -24,7 +24,7 @@ export const Home = () => {
         </div>
         <button
           onClick={() => navigate('/pot/new')}
-          className="bg-secondary hover:bg-secondary/90 text-white font-display text-sm font-semibold rounded-xl px-6 py-3 transition-colors"
+          className="bg-secondary hover:bg-secondary/90 text-background font-display text-sm font-semibold rounded-xl px-6 py-3 transition-colors"
         >
           Start a Pot
         </button>

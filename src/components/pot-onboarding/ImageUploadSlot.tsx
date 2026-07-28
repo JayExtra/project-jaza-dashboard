@@ -34,6 +34,15 @@ export const ImageUploadSlot = ({ label, file, onChange, className = '' }: Image
         setIsDragging(false);
         handleFiles(e.dataTransfer.files);
       }}
+      role="button"
+      tabIndex={0}
+      aria-label={label}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          if (e.key === ' ') e.preventDefault();
+          inputRef.current?.click();
+        }
+      }}
       className={`relative flex flex-col items-center justify-center gap-2 rounded-2xl cursor-pointer overflow-hidden transition-colors ${
         isDragging ? 'bg-primary/10 ring-2 ring-primary' : 'bg-surface-low hover:bg-surface-low/70'
       } ${className}`}

@@ -80,16 +80,18 @@ export const CategoryStep = ({ category, onSelect }: CategoryStepProps) => {
       {CATEGORIES.map((cat) => {
         const active = cat === category;
         return (
-          <div
+          <button
             key={cat}
+            type="button"
             onClick={() => onSelect(cat)}
-            className={`flex flex-col items-center justify-center gap-2.5 py-4 px-2 rounded-xl cursor-pointer transition-colors ${
+            aria-pressed={active}
+            className={`w-full flex flex-col items-center justify-center gap-2.5 py-4 px-2 rounded-xl cursor-pointer transition-colors ${
               active ? 'bg-primary text-on-primary' : 'bg-surface-low text-foreground ring-1 ring-inset ring-foreground/10'
             }`}
           >
             {CATEGORY_ICONS[cat]}
             <span className="text-[13px] font-semibold">{CATEGORY_LABELS[cat]}</span>
-          </div>
+          </button>
         );
       })}
     </div>

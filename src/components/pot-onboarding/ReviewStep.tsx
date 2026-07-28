@@ -2,6 +2,7 @@ interface ReviewStepProps {
   categoryLabel: string;
   title: string;
   storyExcerpt: string;
+  photoSummary: string;
   formattedGoal: string;
   smartGoal: boolean;
   onJumpTo: (step: number) => void;
@@ -21,18 +22,18 @@ const ReviewRow = ({ label, primary, secondary, onEdit }: ReviewRowProps) => (
       <div className="text-[15px] font-semibold text-foreground mb-1">{primary}</div>
       {secondary && <div className="text-[13px] leading-relaxed text-foreground/60">{secondary}</div>}
     </div>
-    <a onClick={onEdit} className="text-sm font-bold text-secondary cursor-pointer">
+    <button type="button" onClick={onEdit} className="text-sm font-bold text-secondary cursor-pointer bg-transparent">
       Edit
-    </a>
+    </button>
   </div>
 );
 
-export const ReviewStep = ({ categoryLabel, title, storyExcerpt, formattedGoal, smartGoal, onJumpTo }: ReviewStepProps) => {
+export const ReviewStep = ({ categoryLabel, title, storyExcerpt, photoSummary, formattedGoal, smartGoal, onJumpTo }: ReviewStepProps) => {
   return (
     <div className="flex flex-col">
       <ReviewRow label="CATEGORY" primary={categoryLabel} onEdit={() => onJumpTo(1)} />
       <ReviewRow label="TITLE & STORY" primary={title} secondary={storyExcerpt} onEdit={() => onJumpTo(2)} />
-      <ReviewRow label="PHOTOS" primary="Cover + feature images" onEdit={() => onJumpTo(3)} />
+      <ReviewRow label="PHOTOS" primary={photoSummary} onEdit={() => onJumpTo(3)} />
       <ReviewRow
         label="GOAL"
         primary={formattedGoal}

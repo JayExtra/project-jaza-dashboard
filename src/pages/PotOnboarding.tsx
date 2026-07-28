@@ -49,6 +49,9 @@ export const PotOnboarding = () => {
   const goalNum = Number(draft.goalAmount) || 0;
   const formattedGoal = `$${goalNum.toLocaleString('en-US')}`;
   const storyExcerpt = draft.story.length > 140 ? `${draft.story.slice(0, 140).trim()}…` : draft.story;
+  const photoSummary = draft.coverImage
+    ? `Cover + ${draft.featureImages.filter(Boolean).length} feature image(s)`
+    : 'No photos added yet';
 
   const requiredOk: Record<number, boolean> = {
     1: true,
@@ -85,8 +88,8 @@ export const PotOnboarding = () => {
       <StepSidebar step={step} content={STEP_CONTENT[step]} />
 
       <div className="flex-1 bg-surface-lowest rounded-tl-[40px] flex flex-col relative min-w-0">
-        <div className="flex-1 overflow-y-auto flex items-center px-16">
-          <div key={step} className="pot-step-in w-full max-w-[560px] mx-auto">
+        <div className="flex-1 overflow-y-auto flex px-16">
+          <div key={step} className="pot-step-in w-full max-w-[560px] mx-auto my-auto">
             {step === 1 && (
               <CategoryStep category={draft.category} onSelect={(category) => setDraft((d) => ({ ...d, category }))} />
             )}
@@ -119,6 +122,7 @@ export const PotOnboarding = () => {
                 categoryLabel={categoryLabel}
                 title={draft.title}
                 storyExcerpt={storyExcerpt}
+                photoSummary={photoSummary}
                 formattedGoal={formattedGoal}
                 smartGoal={draft.smartGoal}
                 onJumpTo={jumpTo}

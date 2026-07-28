@@ -28,8 +28,11 @@ export const GoalStep = ({ goalAmount, smartGoal, onGoalChange, onToggleSmartGoa
             Automatically fine-tune your goal over time based on how your Pot's story and category typically perform.
           </div>
         </div>
-        <div
+        <button
+          type="button"
           onClick={onToggleSmartGoal}
+          role="switch"
+          aria-checked={smartGoal}
           className={`flex-shrink-0 w-[46px] h-[26px] rounded-full p-[3px] cursor-pointer transition-colors ${
             smartGoal ? 'bg-primary' : 'bg-foreground/15'
           }`}
@@ -39,7 +42,7 @@ export const GoalStep = ({ goalAmount, smartGoal, onGoalChange, onToggleSmartGoa
               smartGoal ? 'translate-x-5' : 'translate-x-0'
             }`}
           />
-        </div>
+        </button>
       </div>
     </div>
   );
