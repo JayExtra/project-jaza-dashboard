@@ -7,6 +7,7 @@ import { SignIn } from './pages/SignIn';
 import { SignUp } from './pages/SignUp';
 import { DashboardLayout } from './pages/DashboardLayout';
 import { Home } from './pages/Home';
+import { PotOnboarding } from './pages/PotOnboarding';
 import { Campaign } from './pages/Campaign';
 import { Payments } from './pages/Payments';
 import { Donors } from './pages/Donors';
@@ -43,6 +44,7 @@ const AppRoutes = () => {
         <Route path="/signup" element={<SignUp />} />
         <Route path="/verify-email" element={<VerifyEmail />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/pot/new" element={<PotOnboarding />} />
         {/* Protected layout routes */}
         <Route path="/" element={<DashboardLayout />}>
           <Route index element={<Home />} />
