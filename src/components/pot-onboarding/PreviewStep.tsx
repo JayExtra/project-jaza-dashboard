@@ -20,7 +20,7 @@ export const PreviewStep = ({ coverImage, categoryLabel, title, storyExcerpt, fo
           <span className="text-xs font-semibold text-foreground/40">Drop your cover image</span>
         )}
       </div>
-      <div className="p-4.5">
+      <div className="p-[18px]">
         <span className="inline-block text-[10px] font-bold tracking-wide text-primary bg-primary/10 px-2.5 py-1 rounded-full mb-2.5">
           {categoryLabel}
         </span>
