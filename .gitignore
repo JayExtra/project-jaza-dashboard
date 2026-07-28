@@ -30,3 +30,6 @@ dist-ssr
 .env.development
 .env.test
 
+# Superpowers SDD scratch workspaces
+.superpowers/
+
