@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
-  User, Bell, Sliders, CreditCard, Camera, Trash2, LogOut, Check, Sun, Moon, Laptop, ChevronDown, CheckCircle,
+  User, Bell, Sliders, CreditCard, Camera, Sun, Moon, Laptop, CheckCircle,
   Loader2, Eye, EyeOff, X
 } from 'lucide-react';
 import config from '../lib/config';
@@ -468,8 +468,8 @@ export const SettingsPage = () => {
     return isDark ? 'dark' : 'light';
   });
   const [fontSize, setFontSize] = useState<'sm' | 'md' | 'lg' | 'xl'>('md');
-  const [defaultPage, setDefaultPage] = useState('Home');
-  const [syncInterval, setSyncInterval] = useState('5m');
+  const [_defaultPage, _setDefaultPage] = useState('Home');
+  const [_syncInterval, _setSyncInterval] = useState('5m');
   const [compactMode, setCompactMode] = useState(false);
   const [showStats, setShowStats] = useState(true);
 
@@ -1407,7 +1407,7 @@ export const SettingsPage = () => {
                   {otpValue.map((digit, index) => (
                     <input
                       key={index}
-                      ref={el => otpRefs.current[index] = el}
+                      ref={el => { if (el) otpRefs.current[index] = el; }}
                       type="text"
                       inputMode="numeric"
                       maxLength={1}

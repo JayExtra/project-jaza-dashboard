@@ -1,10 +1,9 @@
 import { useState } from 'react';
 import { useLocation, Link, useNavigate } from 'react-router-dom';
 import {
-  Search, Home, Megaphone, CreditCard, Users, Settings, ChevronDown, ChevronRight, Zap, LogOut,
-  TrendingUp, Sparkles, Bot, BrainCircuit, LayoutGrid, Trophy, Mail, Gift, FileText
+  Search, Megaphone, CreditCard, Users, Settings, ChevronDown, ChevronRight, Zap, LogOut,
+  TrendingUp, Sparkles, Bot, BrainCircuit, LayoutGrid, Trophy, Mail, Gift, FileText, LayoutPanelLeft
 } from 'lucide-react';
-import config from '../../lib/config';
 import { useAuth } from '../../hooks/useAuth';
 
 interface NavItemProps {
@@ -35,11 +34,10 @@ const NavItem = ({
   const content = (
     <div
       onClick={onClick}
-      className={`flex items-center justify-between px-3 py-2 rounded-xl cursor-pointer transition-all ${
-        active
+      className={`flex items-center justify-between px-3 py-2 rounded-xl cursor-pointer transition-all ${active
           ? 'bg-surface-low text-foreground font-semibold shadow-sm'
           : 'text-foreground/60 hover:text-foreground hover:bg-surface-low/50'
-      }`}
+        }`}
     >
       <div className={`flex items-center gap-3 ${collapsed ? 'justify-center w-full' : ''}`}>
         <span className={active ? 'text-primary' : ''}>
@@ -51,11 +49,10 @@ const NavItem = ({
         <div className="flex items-center gap-2 shrink-0">
           {badge && (
             <span
-              className={`text-[9px] font-bold px-1.5 py-0.5 rounded tracking-wide uppercase border ${
-                badgeType === 'ai'
+              className={`text-[9px] font-bold px-1.5 py-0.5 rounded tracking-wide uppercase border ${badgeType === 'ai'
                   ? 'bg-purple-100/50 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-400 dark:border-purple-800/40'
                   : 'bg-secondary/10 text-secondary border-secondary/20'
-              }`}
+                }`}
             >
               {badge}
             </span>
@@ -84,7 +81,7 @@ export const Sidebar = ({ sidebarCollapsed, setIsAiOpen }: SidebarProps) => {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-  const { showSignoutConfirmation ,setSignoutConfirmationStatus, user } = useAuth();
+  const { showSignoutConfirmation, setSignoutConfirmationStatus, user } = useAuth();
 
   const userName = user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'User Profile' : 'User Profile';
   const userEmail = user?.email || 'user@example.com';
@@ -138,7 +135,7 @@ export const Sidebar = ({ sidebarCollapsed, setIsAiOpen }: SidebarProps) => {
             {!sidebarCollapsed && (
               <p className="text-[9px] font-bold text-foreground/40 tracking-widest uppercase px-3 mb-1.5">Workspace</p>
             )}
-            <NavItem path="/" icon={<Home size={18} />} label="Home" active={isActive('/')} collapsed={sidebarCollapsed} />
+            <NavItem path="/" icon={<LayoutPanelLeft size={18} />} label="Overview" active={isActive('/')} collapsed={sidebarCollapsed} />
             <NavItem path="/campaign" icon={<Megaphone size={18} />} label="Campaigns" active={isActive('/campaign')} collapsed={sidebarCollapsed} />
             <NavItem path="/payments" icon={<CreditCard size={18} />} label="Payments" active={isActive('/payments')} collapsed={sidebarCollapsed} />
             <NavItem path="/donors" icon={<Users size={18} />} label="Donors" active={isActive('/donors')} collapsed={sidebarCollapsed} />
@@ -151,13 +148,13 @@ export const Sidebar = ({ sidebarCollapsed, setIsAiOpen }: SidebarProps) => {
               <p className="text-[9px] font-bold text-foreground/40 tracking-widest uppercase px-3 mb-1.5">AI Features</p>
             )}
             <NavItem path="/smart-reports" icon={<Sparkles size={18} />} label="Smart Reports" active={isActive('/smart-reports')} collapsed={sidebarCollapsed} badge="AI" badgeType="ai" />
-            <NavItem 
-              path="/ai-agent" 
-              icon={<Bot size={18} />} 
-              label="AI Agent" 
-              active={isActive('/ai-agent')} 
-              collapsed={sidebarCollapsed} 
-              badge="AI" 
+            <NavItem
+              path="/ai-agent"
+              icon={<Bot size={18} />}
+              label="AI Agent"
+              active={isActive('/ai-agent')}
+              collapsed={sidebarCollapsed}
+              badge="AI"
               badgeType="ai"
               onClick={() => {
                 setIsAiOpen(true);
@@ -192,7 +189,7 @@ export const Sidebar = ({ sidebarCollapsed, setIsAiOpen }: SidebarProps) => {
               <p className="text-[9px] font-bold text-foreground/40 tracking-widest uppercase px-3 mb-1.5">Manage</p>
             )}
             <NavItem path="/reports" icon={<FileText size={18} />} label="Reports" active={isActive('/reports')} collapsed={sidebarCollapsed} />
-            
+
             <div className="mt-1">
               <NavItem
                 path="/settings"

@@ -167,7 +167,7 @@ const addToQueue = (): Promise<void> => {
  * 3. Queue-based retry for concurrent failures
  * 4. Terminal failure handling
  */
-export const authenticatedFetch = async <T = any>(
+export const authenticatedFetch = async <_T = any>(
   url: string,
   options: FetchOptions = {},
   onTokenRefresh?: (newToken: string) => void
@@ -235,10 +235,16 @@ export const authenticatedFetch = async <T = any>(
  * Use this in contexts where you have access to the auth state
  */
 export class AuthenticatedApi {
+  private getToken: () => string | null;
+  private onUnauthorized?: () => void;
+
   constructor(
-    private getToken: () => string | null,
-    private onUnauthorized?: () => void
-  ) {}
+    getToken: () => string | null,
+    onUnauthorized?: () => void
+  ) {
+    this.getToken = getToken;
+    this.onUnauthorized = onUnauthorized;
+  }
 
   private getHeaders(customHeaders?: Record<string, string>): Record<string, string> {
     const headers: Record<string, string> = {
@@ -254,7 +260,7 @@ export class AuthenticatedApi {
     return headers;
   }
 
-  async fetch<T = any>(
+  async fetch<_T = any>(
     url: string,
     options: FetchOptions = {}
   ): Promise<Response> {
@@ -274,7 +280,7 @@ export class AuthenticatedApi {
     return response;
   }
 
-  async get<T = any>(
+  async get<_T = any>(
     url: string,
     customHeaders?: Record<string, string>
   ): Promise<Response> {
@@ -284,7 +290,7 @@ export class AuthenticatedApi {
     });
   }
 
-  async post<T = any>(
+  async post<_T = any>(
     url: string,
     body?: any,
     customHeaders?: Record<string, string>
@@ -296,7 +302,7 @@ export class AuthenticatedApi {
     });
   }
 
-  async put<T = any>(
+  async put<_T = any>(
     url: string,
     body?: any,
     customHeaders?: Record<string, string>
@@ -308,7 +314,7 @@ export class AuthenticatedApi {
     });
   }
 
-  async patch<T = any>(
+  async patch<_T = any>(
     url: string,
     body?: any,
     customHeaders?: Record<string, string>
@@ -320,7 +326,7 @@ export class AuthenticatedApi {
     });
   }
 
-  async delete<T = any>(
+  async delete<_T = any>(
     url: string,
     customHeaders?: Record<string, string>
   ): Promise<Response> {

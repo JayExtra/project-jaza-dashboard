@@ -19,8 +19,7 @@ interface UploadResponse {
 export const ProfileImageUploadDialog = ({
   isOpen,
   onClose,
-  onImageUpload,
-  currentImageUrl
+  onImageUpload
 }: ProfileImageUploadDialogProps) => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
@@ -30,7 +29,7 @@ export const ProfileImageUploadDialog = ({
   const [success, setSuccess] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const { accessToken, user } = useAuth();
+  const { accessToken } = useAuth();
   
   // Pan offset: how much we've dragged the image from center (in canvas pixels)
   const [pan, setPan] = useState({ x: 0, y: 0 });

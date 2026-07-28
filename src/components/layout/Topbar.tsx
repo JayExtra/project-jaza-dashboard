@@ -2,7 +2,16 @@ import { Moon, Sun, Bell, AlignLeft, Sparkles } from 'lucide-react';
 import { SearchBar } from '../ui/SearchBar';
 import { Link } from 'react-router-dom';
 
-export const Topbar = ({ sidebarCollapsed, setSidebarCollapsed, isDark, setIsDark, isAiOpen, setIsAiOpen }) => {
+interface TopbarProps {
+  sidebarCollapsed: boolean;
+  setSidebarCollapsed: (value: boolean) => void;
+  isDark: boolean;
+  setIsDark: (value: boolean) => void;
+  isAiOpen: boolean;
+  setIsAiOpen: (value: boolean) => void;
+}
+
+export const Topbar = ({ sidebarCollapsed, setSidebarCollapsed, isDark, setIsDark, isAiOpen, setIsAiOpen }: TopbarProps) => {
   return (
     <header className="h-20 px-8 flex items-center justify-between border-b border-border bg-surface">
       <div className="flex items-center gap-4 flex-1">

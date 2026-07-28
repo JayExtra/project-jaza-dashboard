@@ -417,6 +417,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
               organisation: result.organisation,
               profileImage: result.profileImage || result.imageUrl,
               profileImageUrl: result.profileImageUrl || result.imageUrl || result.thumbnailUrl,
+              settings: defaultSettings,
             };
             setUser(user);
             localStorage.setItem('user', JSON.stringify(user));
