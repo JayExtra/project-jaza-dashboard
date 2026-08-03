@@ -1,4 +1,4 @@
-import config from './config';
+import { config } from './config';
 import { authenticatedFetch, getAuthToken, attemptRefresh } from './api';
 import type { Pot } from '../types/pot';
 

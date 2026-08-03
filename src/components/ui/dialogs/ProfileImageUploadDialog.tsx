@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Upload, X, AlertCircle, CheckCircle } from 'lucide-react';
-import config from '../../../lib/config';
+import  {config } from '../../../lib/config';
 import { useAuth } from '../../../hooks/useAuth';
 
 

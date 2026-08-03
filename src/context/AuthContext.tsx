@@ -1,7 +1,7 @@
 import React, { createContext, useState, useCallback, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import { defaultSettings, type Settings } from '../types/settings';
-import config from '../lib/config';
+import  { config } from '../lib/config';
 import { attemptRefresh, getAuthToken, resetRefreshFailureFlag } from '../lib/api';
 
 export interface User {

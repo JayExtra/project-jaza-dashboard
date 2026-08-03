@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Loader2, KeyRound, ArrowRight, ArrowLeft } from 'lucide-react';
-import config from '../../lib/config';
+import {config } from '../../lib/config';
 
 interface TwoFactorOverlayProps {
   accessToken: string;

@@ -4,7 +4,7 @@ import { Eye, EyeOff, ArrowRight, Loader2, UserPlus, CheckCircle2 } from 'lucide
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import config from '../lib/config';
+import  { config } from '../lib/config';
 import { useAuth } from '../hooks/useAuth';
 
 const signUpSchema = z.object({

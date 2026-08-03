@@ -4,7 +4,7 @@ import {
   User, Bell, Sliders, CreditCard, Camera, Sun, Moon, Laptop, CheckCircle,
   Loader2, Eye, EyeOff, X
 } from 'lucide-react';
-import config from '../lib/config';
+import { config } from '../lib/config';
 import { ProfileImageUploadDialog } from '../components/ui/dialogs/ProfileImageUploadDialog';
 import { useAuth } from '../hooks/useAuth';
 import { authenticatedFetch } from '../lib/api';

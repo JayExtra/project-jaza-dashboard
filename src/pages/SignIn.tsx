@@ -4,7 +4,7 @@ import { Eye, EyeOff, ArrowRight, Loader2, TrendingUp } from 'lucide-react';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import config from '../lib/config';
+import  { config } from '../lib/config';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { fetchIpAndLocation } from '../context/AuthContext';

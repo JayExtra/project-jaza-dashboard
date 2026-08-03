@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Mail, RefreshCw, AlertCircle } from 'lucide-react';
-import config from '../../../lib/config';
+import  { config } from '../../../lib/config';
 import { useAuth } from '../../../hooks/useAuth';
 
 export const EmailVerificationOverlay = () => {

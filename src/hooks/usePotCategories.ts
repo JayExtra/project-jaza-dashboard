@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { authenticatedFetch } from '../lib/api';
-import config from '../lib/config';
+import { config } from '../lib/config';
 import type { PotCategoryMeta } from '../types/pot';
 
 interface UsePotCategoriesResult {

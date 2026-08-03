@@ -4,7 +4,7 @@ import { Eye, EyeOff, ArrowRight, ArrowLeft, Loader2, KeyRound, Mail, CheckCircl
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import config from '../lib/config';
+import  { config } from '../lib/config';
 
 const apiBaseUrl = config.apiBaseUrl;
 
