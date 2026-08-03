@@ -19,8 +19,8 @@ const TOTAL_STEPS = 6;
 
 export const PotOnboarding = () => {
   const navigate = useNavigate();
-  const { isAuthenticated, isLoading, accessToken } = useAuth();
-  const { categories, isLoading: categoriesLoading, error: categoriesError, retry: retryCategories } = usePotCategories();
+  const { isAuthenticated, isLoading } = useAuth();
+  const { categories, isLoading: categoriesLoading, error: categoriesError, retry: retryCategories } = usePotCategories(isAuthenticated && !isLoading);
 
   const [step, setStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -85,9 +85,9 @@ export const PotOnboarding = () => {
     setIsSubmitting(true);
     setSubmitError(null);
     try {
-      const coverUrl = await uploadPotCover(draft.coverImage, accessToken);
+      const coverUrl = await uploadPotCover(draft.coverImage);
       const featureFiles = draft.featureImages.filter((f): f is File => f !== null);
-      const featureUrls = await uploadPotFeatureImages(featureFiles, accessToken);
+      const featureUrls = await uploadPotFeatureImages(featureFiles);
       const pot = await createPot({
         title: draft.title,
         description: draft.story,

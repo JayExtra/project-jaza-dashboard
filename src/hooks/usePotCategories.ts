@@ -10,7 +10,7 @@ interface UsePotCategoriesResult {
   retry: () => void;
 }
 
-export const usePotCategories = (): UsePotCategoriesResult => {
+export const usePotCategories = (enabled: boolean = true): UsePotCategoriesResult => {
   const [categories, setCategories] = useState<PotCategoryMeta[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -35,8 +35,9 @@ export const usePotCategories = (): UsePotCategoriesResult => {
   }, []);
 
   useEffect(() => {
+    if (!enabled) return;
     fetchCategories();
-  }, [fetchCategories]);
+  }, [enabled, fetchCategories]);
 
   return { categories, isLoading, error, retry: fetchCategories };
 };

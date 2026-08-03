@@ -1,5 +1,5 @@
 import config from './config';
-import { authenticatedFetch } from './api';
+import { authenticatedFetch, getAuthToken, attemptRefresh } from './api';
 import type { Pot } from '../types/pot';
 
 export interface CreatePotPayload {
@@ -12,41 +12,68 @@ export interface CreatePotPayload {
   smartGoalSetting: boolean;
 }
 
-export const uploadPotCover = async (file: File, accessToken: string | null): Promise<string> => {
+/**
+ * Perform a multipart upload request with Authorization header attached from
+ * the current in-memory access token. On a 401, attempts a single token
+ * refresh via the shared auth interceptor and retries once with the
+ * refreshed token.
+ */
+const uploadWithRetry = async (url: string, formData: FormData): Promise<Response> => {
+  const doRequest = () => {
+    const token = getAuthToken();
+    return fetch(url, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      credentials: 'include',
+      body: formData,
+    });
+  };
+
+  let response = await doRequest();
+
+  if (response.status === 401) {
+    const refreshed = await attemptRefresh();
+    if (refreshed) {
+      response = await doRequest();
+    }
+  }
+
+  return response;
+};
+
+export const uploadPotCover = async (file: File): Promise<string> => {
   const formData = new FormData();
   formData.append('coverImage', file);
 
-  const response = await fetch(`${config.apiBaseUrl}/pots/upload-cover`, {
-    method: 'POST',
-    headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
-    credentials: 'include',
-    body: formData,
-  });
+  const response = await uploadWithRetry(`${config.apiBaseUrl}/pots/upload-cover`, formData);
 
   if (!response.ok) {
-    throw new Error('Failed to upload cover image');
+    const result = await response.json().catch(() => null);
+    throw new Error(result?.message || 'Failed to upload cover image');
   }
   const result = await response.json();
+  if (!result?.data) {
+    throw new Error('Unexpected response from server');
+  }
   return result.data;
 };
 
-export const uploadPotFeatureImages = async (files: File[], accessToken: string | null): Promise<string[]> => {
+export const uploadPotFeatureImages = async (files: File[]): Promise<string[]> => {
   if (files.length === 0) return [];
 
   const formData = new FormData();
   files.forEach((file) => formData.append('featuredImages', file));
 
-  const response = await fetch(`${config.apiBaseUrl}/pots/upload-feature`, {
-    method: 'POST',
-    headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
-    credentials: 'include',
-    body: formData,
-  });
+  const response = await uploadWithRetry(`${config.apiBaseUrl}/pots/upload-feature`, formData);
 
   if (!response.ok) {
-    throw new Error('Failed to upload feature images');
+    const result = await response.json().catch(() => null);
+    throw new Error(result?.message || 'Failed to upload feature images');
   }
   const result = await response.json();
+  if (result?.data === undefined || result?.data === null) {
+    throw new Error('Unexpected response from server');
+  }
   return result.data;
 };
 
@@ -61,5 +88,8 @@ export const createPot = async (payload: CreatePotPayload): Promise<Pot> => {
     throw new Error(result?.message || 'Failed to create Pot');
   }
   const result = await response.json();
+  if (!result?.data) {
+    throw new Error('Unexpected response from server');
+  }
   return result.data;
 };
