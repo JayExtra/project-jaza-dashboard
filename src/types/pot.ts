@@ -64,3 +64,31 @@ export const STEP_CONTENT: Record<number, StepContent> = {
     desc: 'This is roughly how supporters will see your Pot. Ready to share it with the world?',
   },
 };
+
+export interface PotCategoryMeta {
+  id: string;
+  name: string;
+  description: string;
+  icon: string; // kebab-case slug, e.g. "heart-pulse" — maps to a lucide-react icon name
+}
+
+export interface PotOrganiser {
+  firstName: string;
+  lastName: string;
+  thumbnailUrl: string | null;
+  id: string;
+}
+
+export interface Pot {
+  id: string;
+  title: string;
+  description: string;
+  organiser: PotOrganiser;
+  coverImage: string;
+  featuredImages: string[];
+  goal: number;
+  category: PotCategoryMeta;
+  pageId: string | null;
+  smartGoalSetting: boolean;
+  currency: string;
+}
