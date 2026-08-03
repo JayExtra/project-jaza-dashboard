@@ -10,14 +10,14 @@ export const GoalStep = ({ goalAmount, smartGoal, onGoalChange, onToggleSmartGoa
     <div>
       <label className="block text-xs font-semibold tracking-wide text-foreground/60 mb-2">FUNDRAISING GOAL</label>
       <div className="relative mb-6">
-        <span className="absolute left-4 top-1/2 -translate-y-1/2 font-display text-lg font-semibold text-foreground">$</span>
+        <span className="absolute left-4 top-1/2 -translate-y-1/2 font-display text-lg font-semibold text-foreground">KES</span>
         <input
           value={goalAmount}
           onChange={(e) => onGoalChange(e.target.value === '' ? '' : Number(e.target.value))}
           type="number"
           min={0}
           step={100}
-          className="w-full font-display text-lg font-semibold text-foreground bg-surface-low border-0 border-l-2 border-primary rounded-lg pl-8 pr-4 py-3.5 outline-none"
+          className="w-full font-display text-lg font-semibold text-foreground bg-surface-low border-0 border-l-2 border-primary rounded-lg pl-16 pr-4 py-3.5 outline-none"
         />
       </div>
 

@@ -30,7 +30,7 @@ export const PreviewStep = ({ coverImage, categoryLabel, title, storyExcerpt, fo
           <div className="h-full w-[6%] bg-gradient-to-br from-secondary to-primary rounded" />
         </div>
         <div className="flex justify-between text-[13px]">
-          <span className="font-bold text-foreground">$0 raised</span>
+          <span className="font-bold text-foreground">KES 0 raised</span>
           <span className="text-foreground/60">of {formattedGoal} goal</span>
         </div>
       </div>
