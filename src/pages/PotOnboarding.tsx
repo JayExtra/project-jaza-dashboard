@@ -99,6 +99,7 @@ export const PotOnboarding = () => {
       });
       setCreatedPot(pot);
     } catch (err) {
+      console.log(err)
       setSubmitError(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
     } finally {
       setIsSubmitting(false);

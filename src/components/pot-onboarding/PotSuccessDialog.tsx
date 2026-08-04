@@ -17,8 +17,9 @@ export const PotSuccessDialog = ({ pot, onDone }: PotSuccessDialogProps) => {
     if (!canvas) return;
 
     const fire = confetti.create(canvas, { resize: true, useWorker: true });
-    fire({ particleCount: 80, spread: 70, origin: { x: 0.2, y: 0.7 } });
-    fire({ particleCount: 80, spread: 70, origin: { x: 0.8, y: 0.7 } });
+    fire({ particleCount: 120, angle: 60, spread: 70, startVelocity: 65, origin: { x: 0, y: 1 } });
+    fire({ particleCount: 120, angle: 120, spread: 70, startVelocity: 65, origin: { x: 1, y: 1 } });
+    fire({ particleCount: 140, angle: 90, spread: 100, startVelocity: 70, origin: { x: 0.5, y: 1 } });
 
     return () => fire.reset();
   }, []);
@@ -27,7 +28,7 @@ export const PotSuccessDialog = ({ pot, onDone }: PotSuccessDialogProps) => {
 
   return (
     <>
-      <canvas ref={canvasRef} className="fixed inset-0 z-[60] pointer-events-none" />
+      <canvas ref={canvasRef} className="fixed inset-0 w-full h-full z-[60] pointer-events-none" />
       <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-40" />
       <div className="fixed inset-0 flex items-center justify-center z-50 p-4">
         <div className="bg-surface-lowest rounded-3xl shadow-lg max-w-md w-full border border-border/10 overflow-hidden text-center">

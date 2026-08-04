@@ -42,38 +42,46 @@ const uploadWithRetry = async (url: string, formData: FormData): Promise<Respons
 };
 
 export const uploadPotCover = async (file: File): Promise<string> => {
+  console.log('Uploading cover image:', file.name, file.size, file.type);
   const formData = new FormData();
   formData.append('coverImage', file);
 
   const response = await uploadWithRetry(`${config.apiBaseUrl}/pots/upload-cover`, formData);
 
   if (!response.ok) {
+    console.log('Upload cover image failed with status:', response.status);
     const result = await response.json().catch(() => null);
     throw new Error(result?.message || 'Failed to upload cover image');
   }
   const result = await response.json();
   if (!result?.data) {
+    console.log('Unexpected response from server:', result);
     throw new Error('Unexpected response from server');
   }
+  console.log('Uploaded cover image successfully:', result.data);
   return result.data;
 };
 
 export const uploadPotFeatureImages = async (files: File[]): Promise<string[]> => {
+  console.log('Uploading feature images:', files.map((f) => f.name).join(', '));
   if (files.length === 0) return [];
 
   const formData = new FormData();
   files.forEach((file) => formData.append('featuredImages', file));
 
-  const response = await uploadWithRetry(`${config.apiBaseUrl}/pots/upload-feature`, formData);
+  const response = await uploadWithRetry(`${config.apiBaseUrl}/pots/upload-features`, formData);
 
   if (!response.ok) {
+    console.log('Upload feature images failed with status:', response.status);
     const result = await response.json().catch(() => null);
     throw new Error(result?.message || 'Failed to upload feature images');
   }
   const result = await response.json();
   if (result?.data === undefined || result?.data === null) {
+    console.log('Unexpected response from server:', result);
     throw new Error('Unexpected response from server');
   }
+  console.log('Uploaded feature images successfully:', result.data);
   return result.data;
 };
 

@@ -37,3 +37,4 @@ export const PreviewStep = ({ coverImage, categoryLabel, title, storyExcerpt, fo
     </div>
   );
 };
+
